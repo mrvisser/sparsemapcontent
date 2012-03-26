@@ -255,8 +255,8 @@ public interface ContentManager {
             AccessDeniedException, IOException;
 
     /**
-     * Move a content item from to.
-     * 
+     * Move a content item from to. Equivalent to calling move(from, to, false, true)
+     *
      * @param from
      *            the source, must exist
      * @param to
@@ -267,7 +267,7 @@ public interface ContentManager {
     List<ActionRecord> move(String from, String to) throws AccessDeniedException, StorageClientException;
 
   /**
-   * Move a content item from to.
+   * Move a content item from to. Equivalent to calling move(from, to, force, true)
    *
    * @param from
    *          the source, must exist
@@ -279,6 +279,27 @@ public interface ContentManager {
    * @throws AccessDeniedException
    */
   List<ActionRecord> move(String from, String to, boolean force) throws AccessDeniedException, StorageClientException;
+
+  /**
+   * Move a content item from to.
+   *
+   * @param from
+   *          the source, must exist
+   * @param to
+   *          the destination must not exist.
+   * @param force
+   *          Whether to forcefully move to the destination (i.e. overwrite)
+   * @param keepHistory
+   *          Whether to keep the history of the destination. If
+   *          <code>true</cod>, append <code>from</code> as the latest content at
+   *          <code>to</code>. If <code>false</code>, delete <code>to</code> before
+   *          copying <code>from</code>.
+   * @throws StorageClientException
+   * @throws AccessDeniedException
+   */
+  List<ActionRecord> move(String from, String to, boolean force,
+      boolean keepDestinationHistory) throws AccessDeniedException,
+      StorageClientException;
 
     /**
      * Get a specific version

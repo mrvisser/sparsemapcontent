@@ -452,30 +452,58 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     
     public void delete(String path, boolean recurse) throws AccessDeniedException, StorageClientException {
         checkOpen();
-        accessControlManager.check(Security.ZONE_CONTENT, path, Permissions.CAN_DELETE);
+        checkCanDelete(path);
         if (exists(path)) {
-          
           Iterator<String> children = listChildPaths(path);
           if (!recurse && children.hasNext()) {
               throw new StorageClientException("Unable to delete a path with active children ["
                   + path + "]. Set recurse=true to delete a tree.");
           }
           
-          while (children.hasNext()) {
-            String child = children.next();
-            delete(child, true);
-          }
-          
-        	Content content = get(path);
-        	Map<String, Object> contentBeforeDelete = content.getProperties();
-        	String resourceType = (String) contentBeforeDelete.get("sling:resourceType");
-        	putProperties(path, ImmutableMap.of(DELETED_FIELD, (Object) TRUE));
-        	hardDeleteStreams(path);
-        	hardDeleteVersions(path);
-        	eventListener.onDelete(Security.ZONE_CONTENT, path, accessControlManager.getCurrentUserId(), resourceType, contentBeforeDelete);
+          // delete and do not keep history
+          deleteInternal(path, false);
         }
     }
 
+    /**
+     * Recursively delete all content beneath the path, including the path itself.
+     * 
+     * @param path The path to recursively delete.
+     * @param keepHistory Whether or not the keep the history of the deleted nodes.
+     * @throws AccessDeniedException 
+     * @throws StorageClientException 
+     */
+    private void deleteInternal(String path, boolean keepHistory) throws StorageClientException,
+        AccessDeniedException {
+      checkOpen();
+      checkCanDelete(path);
+      
+      if (exists(path)) {
+        Iterator<String> children = listChildPaths(path);
+        
+        // recursively delete all children
+        while (children.hasNext()) {
+          String child = children.next();
+          deleteInternal(child, keepHistory);
+        }
+        
+        Content content = get(path);
+        Map<String, Object> contentBeforeDelete = content.getProperties();
+        String resourceType = (String) contentBeforeDelete.get("sling:resourceType");
+        
+        softDeleteProperties(path);
+        
+        eventListener.onDelete(Security.ZONE_CONTENT, path, accessControlManager.getCurrentUserId(), resourceType, contentBeforeDelete);
+      }
+      
+      // streams and versions may be associated to the content even if the content is deleted.
+      hardDeleteStreams(path);
+      
+      if (!keepHistory) {
+        hardDeleteVersions(path);
+      }
+    }
+    
     public long writeBody(String path, InputStream in) throws StorageClientException,
             AccessDeniedException, IOException {
         return writeBody(path, in, null);
@@ -601,75 +629,94 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 
     public List<ActionRecord> move(String from, String to, boolean force)
         throws AccessDeniedException, StorageClientException {
+      return move (from, to, force, true);
+    }
+    
+    public List<ActionRecord> move(String from, String to, boolean force, boolean keepDestHistory)
+        throws AccessDeniedException, StorageClientException {
+      checkOpen();
+      checkCanMove(from, to);
+      
       List<ActionRecord> record = Lists.newArrayList();
 
-      // verify we have permission to move this content.
-      checkOpen();
-      accessControlManager.check(Security.ZONE_CONTENT, from, Permissions.CAN_ANYTHING);
-      accessControlManager.check(Security.ZONE_CONTENT, to, Permissions.CAN_READ.combine(Permissions.CAN_WRITE));
-
+      // verify the source exists
       if (!exists(from)) {
-          throw new StorageClientException("The source content to move from " + from
-                  + " does not exist, move operation failed");
-      }
-      
-      // verify overwrite flags
-      if (exists(to)) {
-        if (force) {
-          delete(to);
-        } else {
-          throw new StorageClientException("The destination content to move to " + to
-            + " exists, move operation failed");
-        }
-      }
-      
-      // a move is really just a copy followed by a delete.. but this should be atomic.
-      try {
-        
-        // copy the "live" (non-version) node
-        copyInternal(from, to, true);
-        
-        // copy the versions
-        File fromFile = getFileFromContentPath(from);
-        for (File versionDir : fromFile.listFiles(new VersionFileFilter(PREFIX_VERSION))) {
-          String fromVersionPath = StorageClientUtils.newPath(from, versionDir.getName());
-          String toVersionPath = StorageClientUtils.newPath(to, versionDir.getName());
-          copyInternal(fromVersionPath, toVersionPath, true);
-        }
-        
-        eventListener.onUpdate(Security.ZONE_CONTENT, to, accessControlManager.getCurrentUserId(),
-            null, true, null, "op:move");
-        
-      } catch (IOException e) {
         throw new StorageClientException(String.format(
-            "Exception transferring streams from '%s' to '%s'.", from, to), e);
+            "The source content to move from %s does not exist, move operation failed", from));
+      }
+
+      // verify either the destination does not exist, or we are explicitly overwriting
+      if (exists(to) && !force) {
+        throw new StorageClientException(String.format(
+            "The destination content to move to %s exists, move operation failed", to));
       }
       
+      // sanitize the 'keepDestHistory' flag. If the destination does not exist, it is implicitly false
+      if (!exists(to)) {
+        keepDestHistory = false;
+      }
+      
+      // first recursively move the children
       Iterator<String> iter = listChildPaths(from);
       while (iter.hasNext()) {
         String childPath = iter.next();
         // Since this is a direct child of the previous from, only the last token needs to
         // be appended to "to"
         record.addAll(move(childPath, to.concat(childPath.substring(childPath.lastIndexOf("/"))),
-        		force));
+            force, keepDestHistory));
       }
       
+      // handle versions
+      if (keepDestHistory) {
+        hardDeleteVersions(from);
+      } else {
+        try {
+          replaceVersions(from, to);
+          hardDeleteVersions(from);
+        } catch (IOException e) {
+          throw new StorageClientException(String.format(
+              "Error transferring versions from '%s' to '%s'", from, to), e);
+        }
+      }
+      
+      // handle streams
+      try {
+        replaceStreams(from, to);
+        hardDeleteStreams(from);
+      } catch (IOException e) {
+        throw new StorageClientException(String.format(
+            "Error transferring streams from '%s' to '%s'", from, to), e);
+      }
+      
+      // handle the properties file
+      try {
+        replaceProperties(from, to);
+        softDeleteProperties(from);
+      } catch (IOException e) {
+        throw new StorageClientException(String.format(
+            "Error copying properties from '%s' to '%s'", from, to), e);
+      }
+
+      try {
+        moveAcl(from, to, force);
+      } catch (AccessDeniedException e) {
+        /*
+         * It should be acceptable to move content without transferring any ACLs. ACLs that
+         * existed before (if any) will be maintained.
+         */
+        LOGGER.debug("Moved content without proper permission to transfer ACLs.");
+      }
 
       // update the indexes by removing the old and updating the new
       Content content = get(to);
       client.removeIndex(from, content.getProperties());
       client.updateIndex(to, content.getProperties());
       
-      // move the ACLs
-      moveAcl(from, to, force);
-
-      // delete the source after its children have been migrated.
-      delete(from);
       // move does not add resourceTypes to events.
+      eventListener.onUpdate(Security.ZONE_CONTENT, to, accessControlManager.getCurrentUserId(), null, true, null, "op:move");
       eventListener.onDelete(Security.ZONE_CONTENT, from, accessControlManager.getCurrentUserId(), null, null, "op:move");
-      
-
       record.add(new ActionRecord(from, to));
+      
       return record;
     }
 
@@ -880,9 +927,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       String objectType = Security.ZONE_CONTENT;
       boolean moved = false;
 
-      // check that we have the same permissions as used in ContentManager.move(..)
-      accessControlManager.check(Security.ZONE_CONTENT, from, Permissions.CAN_ANYTHING);
-      accessControlManager.check(Security.ZONE_CONTENT, to, Permissions.CAN_READ.combine(Permissions.CAN_WRITE));
+      checkCanMoveAcl(from, to);
 
       // get the ACL to move and make the map mutable
       Map<String, Object> fromAcl = Maps.newHashMap(accessControlManager.getAcl(objectType, from));
@@ -928,6 +973,73 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         moved = true;
       }
       return moved;
+    }
+    
+    /**
+     * Determines whether or not the current user can move the object from the given {@code from}
+     * path to the given {@code to} path.
+     * 
+     * @param from
+     * @param to
+     * @throws AccessDeniedException
+     * @throws StorageClientException
+     */
+    private void checkCanMove(String from, String to) throws AccessDeniedException,
+        StorageClientException {
+      accessControlManager.check(Security.ZONE_CONTENT, from,
+          Permissions.CAN_READ.combine(Permissions.CAN_WRITE));
+      accessControlManager.check(Security.ZONE_CONTENT, to,
+              Permissions.CAN_READ.combine(Permissions.CAN_WRITE));
+      checkCanDelete(from);
+      
+      /*
+       * It's worth noting that we're not checking checkCanDelete on the 'to' path. This is because
+       * when moving content to the 'to' path, that specific node is never actually being deleted,
+       * just edited/replaced. Since we consider any children of a write-able node as delete-able
+       * (see checkCanDelete), checking CAN_WRITE on the 'to' path is enough.
+       */
+    }
+    
+    /**
+     * Determines whether or not the current user has the rights to move ACLs from the given
+     * {@code from} path to the given {@code to} path.
+     * 
+     * @param from
+     * @param to
+     * @throws AccessDeniedException
+     * @throws StorageClientException
+     */
+    private void checkCanMoveAcl(String from, String to) throws AccessDeniedException,
+        StorageClientException {
+      // we will be READing, from the source, then deleting from the source 
+      accessControlManager.check(Security.ZONE_CONTENT, from, Permissions.CAN_READ_ACL.combine(Permissions.CAN_WRITE_ACL));
+      
+      // we will be WRITEing to the destination, but we will not be deleting existing ACLs at this point.
+      accessControlManager.check(Security.ZONE_CONTENT, to, Permissions.CAN_WRITE_ACL);
+    }
+    
+    /**
+     * Determines whether or not the current user can delete the object at the given {@code path}.
+     * 
+     * @param path
+     * @throws AccessDeniedException If the user cannot delete the given node.
+     * @throws StorageClientException If there is an generic error accessing the storage client.
+     */
+    private void checkCanDelete(String path) throws AccessDeniedException, StorageClientException {
+      if (StorageClientUtils.isRoot(path)) {
+        // if this is a root path, no check to the parent is required
+        accessControlManager.check(Security.ZONE_CONTENT, path, Permissions.CAN_DELETE);
+      } else {
+        // we first check the parent to see if the user has write access on it. if they do, then
+        // they are allowed to delete this child.
+        String parentPath = StorageClientUtils.getParentObjectPath(path);
+        try {
+          accessControlManager.check(Security.ZONE_CONTENT, parentPath, Permissions.CAN_WRITE);
+        } catch (AccessDeniedException e) {
+          // the user cannot write the parent, but if they can delete the current, then we succeed
+          accessControlManager.check(Security.ZONE_CONTENT, path, Permissions.CAN_DELETE);
+        }
+      }
     }
     
     /**
@@ -1008,6 +1120,45 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         }
     }
     
+    /**
+     * Mark the internal properties file as deleted.
+     * 
+     * @param path
+     * @throws StorageClientException
+     * @throws AccessDeniedException
+     */
+    private void softDeleteProperties(String path) throws StorageClientException,
+        AccessDeniedException {
+      if (exists(path)) {
+        putProperties(path, ImmutableMap.of(DELETED_FIELD, (Object) TRUE));
+      }
+    }
+    
+    /**
+     * Replace the properties at the {@code to} content path with those at the {@code from} content
+     * path.
+     * 
+     * @param from
+     * @param to
+     * @throws IOException
+     */
+    private void replaceProperties(String from, String to) throws IOException {
+      String fromFilesystemPath = getFilesystemPath(from);
+      String toFilesystemPath = getFilesystemPath(to);
+      
+      String fromPropertiesFilePath = StorageClientUtils.newPath(fromFilesystemPath,
+          FILE_PROPERTIES);
+      String toPropertiesFilePath = StorageClientUtils.newPath(toFilesystemPath,
+          FILE_PROPERTIES);
+      FilesystemHelper.copyFile(fs, fromPropertiesFilePath, toPropertiesFilePath);
+    }
+
+    /**
+     * Permanently delete the streams that are associated with the content at the given content
+     * path.
+     * 
+     * @param path
+     */
     private void hardDeleteStreams(String path) {
       File dir = getFileFromContentPath(path);
       if (dir.exists()) {
@@ -1017,21 +1168,56 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       }
     }
     
+    /**
+     * Replace the streams at the {@code to} content path with those at the {@code from} content
+     * path.
+     * 
+     * @param from
+     * @param to
+     * @throws IOException 
+     */
+    private void replaceStreams(String from, String to) throws IOException {
+      hardDeleteStreams(to);
+      File fromFile = getFileFromContentPath(from);
+      String toFilesystemPath = getFilesystemPath(to);
+      for (File fromStreamFile : fromFile.listFiles(new StreamFileFilter(PREFIX_STREAM))) {
+        String toStreamPath = StorageClientUtils.newPath(toFilesystemPath,
+            fromStreamFile.getName());
+        FilesystemHelper.copyFile(fs, fromStreamFile.getAbsolutePath(), toStreamPath);
+      }
+    }
+    
+    /**
+     * Permanently delete the versions from the file-system that are associated with the content
+     * at the given content path.
+     * 
+     * @param path
+     */
     private void hardDeleteVersions(String path) {
       File dir = getFileFromContentPath(path);
       if (dir.exists()) {
-        // versions are stored in a directory within a content path
         for (File versionDir : dir.listFiles(new VersionFileFilter(PREFIX_VERSION))) {
-          // must delete the contents of the version directory before the version directory itself
-          for (File versionFile : versionDir.listFiles()) {
-            if (versionFile.isDirectory()) {
-              throw new IllegalStateException(String.format(
-                  "Cannot delete versions with subdirectories at path '%s'", path));
-            }
-            versionFile.delete();
-          }
-          versionDir.delete();
+          FilesystemHelper.deleteAll(fs, versionDir.getAbsolutePath());
         }
+      }
+    }
+    
+    /**
+     * Replace the versions at the {@code to} content path with those at the {@code from} content
+     * path.
+     * 
+     * @param from
+     * @param to
+     * @throws IOException
+     */
+    private void replaceVersions(String from, String to) throws IOException {
+      hardDeleteVersions(to);
+      File fromFile = getFileFromContentPath(from);
+      String toFilesystemPath = getFilesystemPath(to);
+      for (File fromVersionDir : fromFile.listFiles(new VersionFileFilter(PREFIX_VERSION))) {
+        String toVersionPath = StorageClientUtils.newPath(toFilesystemPath,
+            fromVersionDir.getName());
+        FilesystemHelper.copyAll(fs, fromVersionDir.getAbsolutePath(), toVersionPath);
       }
     }
     
