@@ -9,7 +9,7 @@
   </parent>
   <artifactId>org.sakaiproject.nakamura.jdbc-driver</artifactId>
   <packaging>bundle</packaging>
-  <version>1.5-SNAPSHOT</version>
+  <version>0.1-SNAPSHOT</version>
   <name>Sakai Nakamura :: Generic JDBC SPI Implementation</name>
   <description>Storage SPI implementation using JDBC </description>
   <scm>
@@ -53,7 +53,7 @@
 		      to include your database connection details
 		    -->
 		    <exclude>**/oracle/**</exclude>
-		    <!--exclude>**/mysql/**</exclude-->
+		    <exclude>**/mysql/**</exclude>
 		    <exclude>**/postgresql/**</exclude>
 		  </excludes>
 		</configuration>
