@@ -31,10 +31,10 @@ public class MysqlSetup {
         try {
             BaseJDBCStorageClientPool connectionPool = new BaseJDBCStorageClientPool();
             Builder<String, Object> b = ImmutableMap.builder();
-            b.put(BaseJDBCStorageClientPool.CONNECTION_URL,"jdbc:mysql://127.0.0.1:3306/nakamura?useUnicode=true&amp;characterEncoding=UTF-8");
+            b.put(BaseJDBCStorageClientPool.CONNECTION_URL,"jdbc:mysql://127.0.0.1:3306/sakai22?useUnicode=true&amp;characterEncoding=UTF-8");
             b.put(BaseJDBCStorageClientPool.JDBC_DRIVER, "com.mysql.jdbc.Driver");
-            b.put("username", "sakaiuser");
-            b.put("password", "ironchef");
+            b.put("username", "sakai22");
+            b.put("password", "sakai22");
             b.put("store-base-dir", "target/store");
             b.put(Configuration.class.getName(), configuration);
             connectionPool
