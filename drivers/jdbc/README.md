@@ -1,8 +1,5 @@
-# Oracle SPI Storage implementation
+# Generic JDBC SPI Storage implementation
 
-## Licensing
+## Summary
 
-This bundle packages the Oracle JDBC Driver to make it availalbe on the classpath. Before building and distributing 
-the binary package you should consult your own Lawyer to ensure that you are complying with the License on the Oracle
-JDBC Driver. If you are not able to comply, please use one of the alternative SPI Implementations.
-
+This package is a generic JDBC implementation of the sparsemapcontent storage SPI. It provides a component (JDBCStorageClientPool) that allows you to configure common JDBC properties (e.g., driver class, jdbc url, username and password). This driver assumes that you will also make available the appropriate JDBC library on the classpath, as it does not embed any JDBC drivers itself.
