@@ -83,7 +83,7 @@
     <dependency>
        <groupId>org.sakaiproject.nakamura</groupId>
        <artifactId>org.sakaiproject.nakamura.core</artifactId>
-       <version>1.5-SNAPSHOT</version>
+       <version>1.5.1-SNAPSHOT</version>
        <classifier>tests</classifier>
        <scope>test</scope>
     </dependency>
