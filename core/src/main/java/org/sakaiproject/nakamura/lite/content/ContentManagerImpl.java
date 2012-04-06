@@ -447,9 +447,25 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     }
 
     public void delete(String path) throws AccessDeniedException, StorageClientException {
+      delete(path, false);
+    }
+    
+    public void delete(String path, boolean recurse) throws AccessDeniedException, StorageClientException {
         checkOpen();
         accessControlManager.check(Security.ZONE_CONTENT, path, Permissions.CAN_DELETE);
         if (exists(path)) {
+          
+          Iterator<String> children = listChildPaths(path);
+          if (!recurse && children.hasNext()) {
+              throw new StorageClientException("Unable to delete a path with active children ["
+                  + path + "]. Set recurse=true to delete a tree.");
+          }
+          
+          while (children.hasNext()) {
+            String child = children.next();
+            delete(child, true);
+          }
+          
         	Content content = get(path);
         	Map<String, Object> contentBeforeDelete = content.getProperties();
         	String resourceType = (String) contentBeforeDelete.get("sling:resourceType");
