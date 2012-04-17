@@ -384,7 +384,7 @@ public abstract class AbstractContentManagerTest {
         Assert.assertNotNull(content);
         Assert.assertEquals("valueParent", content.getProperty("propParent"));
 
-        contentManager.delete("/testSimpleDelete");
+        contentManager.delete("/testSimpleDelete", true);
 
     }
 
@@ -412,7 +412,7 @@ public abstract class AbstractContentManagerTest {
         Assert.assertNotNull(content);
         Assert.assertEquals("valueParent", content.getProperty("propParent"));
 
-        contentManager.delete("testSimpleDeleteRoot");
+        contentManager.delete("testSimpleDeleteRoot", true);
 
     }
 
@@ -881,7 +881,88 @@ public abstract class AbstractContentManagerTest {
   }
 
   @Test
-  public void testMoveWithVersionsAtDepth() throws Exception {
+  public void testMoveWithDestinationHistory() throws Exception {
+    Repository repository = (Repository) new BaseMemoryRepository().getRepository();
+    Session adminSession = repository.loginAdministrative();
+    ContentManager adminContentManager = adminSession.getContentManager();
+
+    String from = "testMove1";
+    String to = "testMove2";
+
+    // add some initial content
+    adminContentManager.update(new Content(from, ImmutableMap.<String, Object>of("prop1", "value1")));
+    adminContentManager.update(new Content(to, ImmutableMap.<String, Object>of("prop2", "value2")));
+
+    // save a version of the content and verify the history
+    adminContentManager.saveVersion(from);
+    List<String> history = adminContentManager.getVersionHistory(from);
+    Assert.assertEquals(1, history.size());
+
+    adminContentManager.saveVersion(to);
+    adminContentManager.saveVersion(to);
+    adminContentManager.saveVersion(to);
+    history = adminContentManager.getVersionHistory(to);
+    Assert.assertEquals(3, history.size());
+
+    // move the content
+    adminContentManager.move(from, to, true);
+
+    // check the base content is there
+    Assert.assertFalse(adminContentManager.exists(from));
+    Assert.assertTrue(adminContentManager.exists(to));
+
+    // ensure we don't have properties from the previous content version
+    Content movedTo = adminContentManager.get(to);
+    Assert.assertNull(movedTo.getProperty("prop2"));
+    Assert.assertEquals("value1", movedTo.getProperty("prop1"));
+
+    // check the history
+    history = adminContentManager.getVersionHistory(to);
+    Assert.assertEquals(3, history.size());
+  }
+
+  @Test
+  public void testMoveWithoutDestinationHistory() throws Exception {
+    Repository repository = (Repository) new BaseMemoryRepository().getRepository();
+    Session adminSession = repository.loginAdministrative();
+    ContentManager adminContentManager = adminSession.getContentManager();
+
+    String from = "testMove1";
+    String to = "testMove2";
+
+    // add some initial content
+    adminContentManager.update(new Content(from, ImmutableMap.<String, Object>of("prop1", "value1")));
+    adminContentManager.update(new Content(to, ImmutableMap.<String, Object>of("prop2", "value2")));
+
+    // save a version of the content and verify the history
+    adminContentManager.saveVersion(from);
+    List<String> history = adminContentManager.getVersionHistory(from);
+    Assert.assertEquals(1, history.size());
+
+    adminContentManager.saveVersion(to);
+    adminContentManager.saveVersion(to);
+    adminContentManager.saveVersion(to);
+    history = adminContentManager.getVersionHistory(to);
+    Assert.assertEquals(3, history.size());
+
+    // move the content
+    adminContentManager.move(from, to, true, false);
+
+    // check the base content is there
+    Assert.assertTrue(adminContentManager.exists(to));
+
+    // ensure we don't have properties from the previous content version
+    Content movedTo = adminContentManager.get(to);
+    Assert.assertNull(movedTo.getProperty("prop2"));
+    Assert.assertEquals("value1", movedTo.getProperty("prop1"));
+
+    // check the history
+    history = adminContentManager.getVersionHistory(to);
+    Assert.assertEquals(1, history.size());
+  }
+
+  @Test
+  public void testMoveThenVersionAtDepth() throws Exception {
     Repository repository = (Repository) new BaseMemoryRepository().getRepository();
     Session adminSession = repository.loginAdministrative();
     ContentManager adminContentManager = adminSession.getContentManager();

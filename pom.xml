@@ -275,21 +275,4 @@
 			<distribution>repo</distribution>
 		</license>
 	</licenses>
-	<developers>
-		<developer>
-			<id>ieb</id>
-			<name>Ian Boston</name>
-			<email>ieb@tfd.co.uk</email>
-			<url>http://www.tfd.co.uk</url>
-			<organization>Timefields</organization>
-			<organizationUrl>http://www.tfd.co.uk</organizationUrl>
-			<roles>
-				<role>developer</role>
-			</roles>
-			<timezone>+10</timezone>
-			<properties>
-				<picUrl>http://www.gravatar.com/avatar/b4c84c66ffbbb824b5ecf24362318554.png</picUrl>
-			</properties>
-		</developer>
-	</developers>
 </project>
