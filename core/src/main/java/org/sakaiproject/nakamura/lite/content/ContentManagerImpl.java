@@ -17,7 +17,6 @@
  */
 package org.sakaiproject.nakamura.lite.content;
 
-import static org.sakaiproject.nakamura.lite.content.InternalContent.BLOCKID_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.COPIED_DEEP_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.COPIED_FROM_ID_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.COPIED_FROM_PATH_FIELD;
@@ -26,16 +25,10 @@ import static org.sakaiproject.nakamura.lite.content.InternalContent.CREATED_FIE
 import static org.sakaiproject.nakamura.lite.content.InternalContent.DELETED_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.LASTMODIFIED_BY_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.LASTMODIFIED_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.NEXT_VERSION_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.PATH_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.PREVIOUS_BLOCKID_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.PREVIOUS_VERSION_UUID_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.READONLY_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.STRUCTURE_UUID_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.TRUE;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.UUID_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.VERSION_HISTORY_ID_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.VERSION_NUMBER_FIELD;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -46,7 +39,6 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -348,19 +340,6 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         }
         return resourceType;
     }
-    private String getResourceType(Map<String, Object> c) {
-        String resourceType = null;
-        if ( c != null ) {
-            if ( c.containsKey(Content.SLING_RESOURCE_TYPE_FIELD)) {
-                resourceType = (String) c.get(Content.SLING_RESOURCE_TYPE_FIELD);
-            } else if ( c.containsKey(Content.RESOURCE_TYPE_FIELD)) {
-                resourceType = (String) c.get(Content.RESOURCE_TYPE_FIELD);
-            } else if ( c.containsKey(Content.MIMETYPE_FIELD)) {
-                resourceType = (String) c.get(Content.MIMETYPE_FIELD);
-            }
-        }
-        return resourceType;
-    }
 
     public void triggerRefreshAll() throws StorageClientException {
         triggerRefreshAll("/");
@@ -374,13 +353,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 				triggerRefreshAll(child.getAbsolutePath());
     		}
     		try {
-	    		Content content = get(path);
-	    		if (content != null) {
-		    		Map<String, Object> properties = content.getProperties();
-		    		if (properties != null) {
-		    			eventListener.onUpdate(Security.ZONE_CONTENT, path, User.ADMIN_USER, getResourceType(content), false, null, "op:update");
-		    		}
-	    		}
+	    		triggerRefresh(path);
     		} catch (AccessDeniedException e) {
     			LOGGER.error("Exception while refreshing all content", e);
     		}
