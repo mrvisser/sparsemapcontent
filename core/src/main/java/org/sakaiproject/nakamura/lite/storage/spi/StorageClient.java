@@ -137,17 +137,6 @@ public interface StorageClient {
     void close();
 
     /**
-     * Find all of the children of a certain node.
-     * @param keySpace
-     * @param columnFamily
-     * @param key the row id
-     * @return an iterator of content items below this content item
-     * @throws StorageClientException
-     */
-    DisposableIterator<Map<String, Object>> listChildren(String keySpace, String columnFamily,
-            String key, DirectCacheAccess cachingManager) throws StorageClientException;
-
-    /**
      * Does this content item have a stream body by this id?
      * @param content
      * @param streamId

@@ -8,6 +8,7 @@ import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Service;
 import org.infinispan.Cache;
+import org.infinispan.manager.CacheManager;
 import org.infinispan.manager.DefaultCacheManager;
 import org.sakaiproject.nakamura.api.lite.StorageCacheManager;
 import org.sakaiproject.nakamura.lite.storage.spi.AbstractClientConnectionPool;

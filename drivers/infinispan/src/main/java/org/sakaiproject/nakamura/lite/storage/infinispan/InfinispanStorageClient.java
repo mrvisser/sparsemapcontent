@@ -15,6 +15,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.infinispan.Cache;
+import org.infinispan.manager.CacheContainer;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
@@ -49,32 +50,26 @@ public class InfinispanStorageClient implements StorageClient {
 			.getLogger(InfinispanStorageClient.class);
 	private static final String INDEX_COLUMN_FAMILY = "smcindex";
 
-	private static final Set<String> INTERNAL_INDEX_COLUMNS = ImmutableSet.<String>of(
-			Content.PARENT_HASH_FIELD);
-	
-	private final Cache<String, Object> storage;
+	private final CacheContainer storageContainer;
 
 	private Set<String> indexColumns;
 	private StorageClientListener storageClientListener;
 	private List<Disposable> toDispose = Lists.newArrayList();
 	public List<Map<String, Object>> tResultRows;
 
-	public InfinispanStorageClient(Cache<String, Object> storage, Set<String> indexColumns) {
-		this.storage = storage;
+	public InfinispanStorageClient(CacheContainer storageContainer, Set<String> indexColumns) {
+		this.storageContainer = storageContainer;
 		this.indexColumns = indexColumns;
 	}
 
 	public Map<String, Object> get(String keySpace, String columnFamily,
 			String key) throws StorageClientException {
-		String storageKey = createStorageKey(keySpace, columnFamily, key);
-		return getMapFromStorage(storageKey);
+		return getMapFromStorage(keySpace, columnFamily, key);
 	}
 
 	public void insert(String keySpace, String columnFamily, String key,
 			Map<String, Object> values, boolean probablyNew)
 			throws StorageClientException {
-		String storageKey = createStorageKey(keySpace, columnFamily, key);
-
 		Map<String, Object> before = get(keySpace, columnFamily, key);
 		Map<String, Object> mutableValues = new HashMap<String, Object>(before);
 
@@ -115,7 +110,7 @@ public class InfinispanStorageClient implements StorageClient {
 			storageClientListener.before(keySpace, columnFamily, key, before);
 		}
 		
-		storage.put(storageKey, mutableValues);
+		getCache(keySpace, columnFamily).put(key, mutableValues);
 
 		if (storageClientListener != null) {
 			storageClientListener.after(keySpace, columnFamily, key,
@@ -125,7 +120,6 @@ public class InfinispanStorageClient implements StorageClient {
 
 	public void remove(String keySpace, String columnFamily, String key)
 			throws StorageClientException {
-		String storageKey = createStorageKey(keySpace, columnFamily, key);
 		Map<String, Object> values = get(keySpace, columnFamily, key);
 		if (values != null) {
 			for (Map.Entry<String, Object> entry : values.entrySet()) {
@@ -142,7 +136,7 @@ public class InfinispanStorageClient implements StorageClient {
 					}
 				}
 			}
-			storage.remove(storageKey);
+			getCache(keySpace, columnFamily).remove(key);
 		}
 	}
 
@@ -160,18 +154,16 @@ public class InfinispanStorageClient implements StorageClient {
 		return null;
 	}
 
-	public DisposableIterator<Map<String, Object>> find(String keySpace,
-			String authorizableColumnFamily, Map<String, Object> properties,
+	public DisposableIterator<Map<String, Object>> find(final String keySpace,
+			final String columnFamily, Map<String, Object> properties,
 			DirectCacheAccess cachingManager) throws StorageClientException {
-		final String fKeyspace = keySpace;
-		final String fAuthorizableColumnFamily = authorizableColumnFamily;
 		List<Set<String>> andTerms = new ArrayList<Set<String>>();
 
 		for (Entry<String, Object> e : properties.entrySet()) {
 			String k = e.getKey();
 			Object v = e.getValue();
 
-			if (shouldIndex(keySpace, authorizableColumnFamily, k)
+			if (shouldIndex(keySpace, columnFamily, k)
 					|| (v instanceof Map)) {
 				if (v != null) {
 					if (v instanceof Map) {
@@ -187,20 +179,17 @@ public class InfinispanStorageClient implements StorageClient {
 							Entry<String, Object> subterm = subtermsIter.next();
 							String subk = subterm.getKey();
 							Object subv = subterm.getValue();
-							if (shouldIndex(keySpace, authorizableColumnFamily,
-									subk)) {
+							if (shouldIndex(keySpace, columnFamily, subk)) {
 								try {
 									Set<String> or = new HashSet<String>();
 									String indexKey = new String(
 											subk.getBytes("UTF-8"))
 											+ ":"
-											+ authorizableColumnFamily
-											+ ":"
 											+ StorageClientUtils
 													.insecureHash(new String(
 															Types.toByteArray(subv)));
 									Map<String, Object> tempRow = get(keySpace,
-											INDEX_COLUMN_FAMILY, indexKey);
+											columnFamily, indexKey);
 									for (Entry<String, Object> tempRows : tempRow
 											.entrySet()) {
 										or.add(tempRows.getKey());
@@ -227,13 +216,11 @@ public class InfinispanStorageClient implements StorageClient {
 							Set<String> and = new HashSet<String>();
 							String indexKey = new String(k.getBytes("UTF-8"))
 									+ ":"
-									+ authorizableColumnFamily
-									+ ":"
 									+ StorageClientUtils
 											.insecureHash(new String(Types
 													.toByteArray(v)));
 							Map<String, Object> tempRow = get(keySpace,
-									INDEX_COLUMN_FAMILY, indexKey);
+									columnFamily, indexKey);
 							for (Entry<String, Object> tempRows : tempRow
 									.entrySet()) {
 								and.add(tempRows.getKey());
@@ -261,7 +248,7 @@ public class InfinispanStorageClient implements StorageClient {
 		Iterator<String> iterator = andResultSet.iterator();
 
 		while (iterator.hasNext()) {
-			Map<String, Object> row = get(keySpace, authorizableColumnFamily,
+			Map<String, Object> row = get(keySpace, columnFamily,
 					iterator.next());
 			resultRows.add(row);
 		}
@@ -309,7 +296,7 @@ public class InfinispanStorageClient implements StorageClient {
 				if (fIterator.hasNext()) {
 					try {
 						String id = fIterator.next();
-						nextValue = get(fKeyspace, fAuthorizableColumnFamily,
+						nextValue = get(keySpace, columnFamily,
 								id);
 						LOGGER.debug("Got Row ID {} {} ", id, nextValue);
 						return true;
@@ -334,15 +321,6 @@ public class InfinispanStorageClient implements StorageClient {
 	}
 
 	public void close() {
-		// TODO Auto-generated method stub
-
-	}
-
-	public DisposableIterator<Map<String, Object>> listChildren(
-			String keySpace, String columnFamily, String key,
-			DirectCacheAccess cachingManager) throws StorageClientException {
-		return find(keySpace, columnFamily, ImmutableMap.<String, Object>of(
-				Content.PARENT_HASH_FIELD, key), cachingManager);
 	}
 
 	public boolean hasBody(Map<String, Object> content, String streamId) {
@@ -351,7 +329,7 @@ public class InfinispanStorageClient implements StorageClient {
 
 	public DisposableIterator<SparseRow> listAll(String keySpace,
 			String columnFamily) throws StorageClientException {
-		final Iterator<Entry<String, Object>> i = storage.entrySet().iterator(); 
+		final Iterator<Entry<Object, Object>> i = getCache(keySpace, columnFamily).entrySet().iterator(); 
 		return new DisposableIterator<SparseRow>() {
 
 			public boolean hasNext() {
@@ -359,7 +337,7 @@ public class InfinispanStorageClient implements StorageClient {
 			}
 
 			public SparseRow next() {
-				Entry<String, Object> entry = i.next();
+				Entry<Object, Object> entry = i.next();
 				@SuppressWarnings("unchecked")
 				Map<String, Object> content = (Map<String, Object>) entry.getValue();
 				return new SparseMapRow((String)content.get(Content.UUID_FIELD), content);
@@ -377,7 +355,7 @@ public class InfinispanStorageClient implements StorageClient {
 
 	public long allCount(String keySpace, String columnFamily)
 			throws StorageClientException {
-		return storage.entrySet().size();
+		return getCache(keySpace, columnFamily).entrySet().size();
 	}
 
 	public void setStorageClientListener(
@@ -386,15 +364,19 @@ public class InfinispanStorageClient implements StorageClient {
 	}
 
 	@SuppressWarnings("unchecked")
-	private Map<String, Object> getMapFromStorage(String storageKey) {
-		return (Map<String, Object>) storage.get(storageKey);
+	private Map<String, Object> getMapFromStorage(String keySpace, String columnFamily, String key) throws StorageClientException {
+		return (Map<String, Object>) getCache(keySpace, columnFamily).get(key);
 	}
 
-	private String createStorageKey(String keySpace, String columnFamily,
-			String key) {
-		return String.format("%s:%s:%s", keySpace, columnFamily, key);
+	private <K, V> Cache<K, V> getCache(String keySpace, String columnFamily) throws StorageClientException {
+		String cacheName = String.format("%s:%s", keySpace, columnFamily);
+		Cache<K, V> cache = storageContainer.getCache(cacheName);
+		if (cache == null) {
+			throw new StorageClientException(String.format("Failed to obtain cache '%s'", cacheName));
+		}
+		return cache;
 	}
-
+	
 	private <T extends Disposable> T registerDisposable(T disposable) {
 		toDispose.add(disposable);
 		return disposable;
@@ -402,27 +384,25 @@ public class InfinispanStorageClient implements StorageClient {
 
 	private void addIndex(String keySpace, String columnFamily, String key,
 			String propName, byte[] b) throws StorageClientException {
-		String indexKey = String.format("%s:%s:%s", propName, columnFamily, StorageClientUtils.insecureHash(b));
+		String indexKey = String.format("%s:%s", propName, StorageClientUtils.insecureHash(b));
 		Map<String, Object> values = new HashMap<String, Object>();
 		values.put(key, (Object) "Whatever value of index");
-		insert(keySpace, INDEX_COLUMN_FAMILY, indexKey, values, true);
+		insert(keySpace, columnFamily, indexKey, values, true);
 	}
 	
 	private void removeIndex(String keySpace, String columnFamily, String key,
 			String propName, byte[] b) throws StorageClientException {
-		String indexKey = String.format("%s:%s:%s", propName, columnFamily, StorageClientUtils.insecureHash(b));
-		Map<String, Object> index = get(keySpace, INDEX_COLUMN_FAMILY, indexKey);
+		String indexKey = String.format("%s:%s", propName, StorageClientUtils.insecureHash(b));
+		Map<String, Object> index = get(keySpace, columnFamily, indexKey);
 		if (index != null && index.containsKey(key)) {
 			index.put(key, new RemoveProperty());
-			insert(keySpace, INDEX_COLUMN_FAMILY, indexKey, index, false);
+			insert(keySpace, columnFamily, indexKey, index, false);
 		}
 	}
 
 	private boolean shouldIndex(String keySpace, String columnFamily,
 			String columnName) throws StorageClientException {
-		if (INTERNAL_INDEX_COLUMNS.contains(columnName)) {
-			return true;
-		} else if (indexColumns.contains(columnFamily + ":" + columnName)) {
+		if (indexColumns.contains(columnFamily + ":" + columnName)) {
 			return true;
 		} else {
 			return false;
