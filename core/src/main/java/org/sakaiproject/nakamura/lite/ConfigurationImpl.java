@@ -17,13 +17,8 @@
  */
 package org.sakaiproject.nakamura.lite;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Properties;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.felix.scr.annotations.Activate;
@@ -35,8 +30,12 @@ import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import java.util.Properties;
 
 @Component(immediate = true, metatype = true)
 @Service(value = Configuration.class)
@@ -52,21 +51,9 @@ public class ConfigurationImpl implements Configuration {
     protected static final String CONTENT_COLUMN_FAMILY = "content-column-family";
     @Property(value = "lk")
     protected static final String LOCK_COLUMN_FAMILY = "lock-column-family";
+    @Property(value = "idx")
+    protected static final String INDEX_COLUMN_FAMILY = "index-column-family";
     
-    protected static final String DEFAULT_INDEX_COLUMN_NAMES = "au:rep:principalName,au:type,cn:sling:resourceType," +
-    		"cn:sakai:pooled-content-manager,cn:sakai:messagestore,cn:sakai:type,cn:sakai:marker,cn:sakai:tag-uuid," +
-    		"cn:sakai:contactstorepath,cn:sakai:state,cn:_created,cn:sakai:category,cn:sakai:messagebox,cn:sakai:from," +
-    		"cn:sakai:subject";
-
-    @Property(value=DEFAULT_INDEX_COLUMN_NAMES)
-    protected static final String INDEX_COLUMN_NAMES = "index-column-names";
-
-    private static final String DEFAULT_INDEX_COLUMN_TYPES = "cn:sakai:pooled-content-manager=String[],cn:sakai:category=String[]";
-
-    @Property(value=DEFAULT_INDEX_COLUMN_TYPES)
-    protected static final String INDEX_COLUMN_TYPES = "index-column-types";
-
-
     private static final String SHAREDCONFIGPATH = "org/sakaiproject/nakamura/lite/shared.properties";
 
     protected static final String SHAREDCONFIGPROPERTY = "sparseconfig";
@@ -78,9 +65,8 @@ public class ConfigurationImpl implements Configuration {
     private String authorizableColumnFamily;
     private String contentColumnFamily;
     private String lockColumnFamily;
-    private String[] indexColumnNames;
+    private String indexColumnFamily;
     private Map<String, String> sharedProperties;
-    private String[] indexColumnTypes;
 
     @SuppressWarnings("unchecked")
     @Activate
@@ -118,29 +104,6 @@ public class ConfigurationImpl implements Configuration {
 
         // make the shared properties immutable.
         sharedProperties = ImmutableMap.copyOf(sharedProperties);
-        indexColumnNames = StringUtils.split(getProperty(INDEX_COLUMN_NAMES,DEFAULT_INDEX_COLUMN_NAMES, sharedProperties, properties),',');
-        LOGGER.info("Using Configuration for Index Column Names as              {}", Arrays.toString(indexColumnNames));
-        indexColumnTypes = StringUtils.split(getProperty(INDEX_COLUMN_TYPES,DEFAULT_INDEX_COLUMN_TYPES, sharedProperties, properties),',');
-
-                
-
-
-    }
-
-    private String getProperty(String name, String defaultValue,
-            Map<String, ?> ...properties  ) {
-     // if present in the shared properties, load the default from there.
-        String value = defaultValue;
-        for ( Map<String, ?> p : properties ) {
-            if ( p.containsKey(name) ) {
-                Object v  = p.get(name);
-                if ( v != null && !defaultValue.equals(v)) {
-                    value = String.valueOf(v);
-                    LOGGER.debug("{} is configured as {}", value);
-                }
-            }
-        }
-        return value;
         
     }
 
@@ -163,16 +126,13 @@ public class ConfigurationImpl implements Configuration {
     public String getLockColumnFamily() {
         return lockColumnFamily;
     }
-
-    public String[] getIndexColumnNames() {
-        return indexColumnNames;
-    }
+    
     public Map<String, String> getSharedConfig() {
         return sharedProperties;
     }
 
-    public String[] getIndexColumnTypes() {
-        return indexColumnTypes;
+    public String getIndexColumnFamily() {
+      return indexColumnFamily;
     }
 
 }

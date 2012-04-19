@@ -22,7 +22,7 @@ public interface StorageClientListener {
      * @param columnFamily
      * @param key
      */
-    void delete(String keySpace, String columnFamily, String key);
+    void delete(String cacheName, String key);
 
     /**
      * Notification of the state of the map after it has been updated.
@@ -32,7 +32,7 @@ public interface StorageClientListener {
      * @param key
      * @param mapAfter
      */
-    void after(String keySpace, String columnFamily, String key, Map<String, Object> mapAfter);
+    void after(String cacheName, String key, Map<String, Object> mapAfter);
 
     /**
      * Notification of the state of the map before being updated.
@@ -42,7 +42,7 @@ public interface StorageClientListener {
      * @param key
      * @param mapBefore
      */
-    void before(String keySpace, String columnFamily, String key, Map<String, Object> mapBefore);
+    void before(String cacheName, String key, Map<String, Object> mapBefore);
 
     /**
      * The whole transaction since the last begin() has been committed.

@@ -31,7 +31,7 @@ import java.util.Map;
  * Defines a ContentManager service for operating on content.
  */
 public interface ContentManager {
-
+  
     /**
      * Get a content object from the store.
      * 

@@ -17,15 +17,16 @@
  */
 package org.sakaiproject.nakamura.lite;
 
-import java.util.Map;
+import com.google.common.collect.Maps;
 
+import org.infinispan.Cache;
+import org.infinispan.manager.CacheContainer;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.CommitHandler;
 import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.Session;
-import org.sakaiproject.nakamura.api.lite.StorageCacheManager;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StoreListener;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
@@ -41,7 +42,7 @@ import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Maps;
+import java.util.Map;
 
 public class SessionImpl implements Session {
 
@@ -53,22 +54,20 @@ public class SessionImpl implements Session {
     private User currentUser;
     private Repository repository;
     private Exception closedAt;
-    private StorageClient client;
+    private CacheContainer cacheContainer;
     private Authenticator authenticator;
     private StoreListener storeListener;
     private Map<String, CommitHandler> commitHandlers = Maps.newLinkedHashMap();
-    private StorageCacheManager storageCacheManager;
     private Configuration configuration;
     private static long nagclient;
 
     public SessionImpl(Repository repository, User currentUser, StorageClient client,
-            Configuration configuration, StorageCacheManager storageCacheManager,
-            StoreListener storeListener, PrincipalValidatorResolver principalValidatorResolver)
-            throws ClientPoolException, StorageClientException, AccessDeniedException {
+        CacheContainer cacheContainer, Configuration configuration, StoreListener storeListener,
+            PrincipalValidatorResolver principalValidatorResolver) throws ClientPoolException,
+            StorageClientException, AccessDeniedException {
         this.currentUser = currentUser;
         this.repository = repository;
-        this.client = client;
-        this.storageCacheManager = storageCacheManager;
+        this.cacheContainer = cacheContainer;
         this.storeListener = storeListener;
         this.configuration = configuration;
         
@@ -78,6 +77,7 @@ public class SessionImpl implements Session {
             }
             nagclient++;
         }
+        
         accessControlManager = new AccessControlManagerImpl(client, currentUser, configuration,
                 getCache(configuration.getAclColumnFamily()), storeListener,
                 principalValidatorResolver);
@@ -88,9 +88,6 @@ public class SessionImpl implements Session {
 
         contentManager = new ContentManagerImpl(client, accessControlManager, configuration,
                 getCache(configuration.getContentColumnFamily()), storeListener);
-
-        lockManager = new LockManagerImpl(client, configuration, currentUser,
-                getCache(configuration.getLockColumnFamily()));
 
         authenticator = new AuthenticatorImpl(client, configuration, authorizableCache);
 
@@ -103,12 +100,9 @@ public class SessionImpl implements Session {
             accessControlManager.close();
             authorizableManager.close();
             contentManager.close();
-            lockManager.close();
-            client.close();
             accessControlManager = null;
             authorizableManager = null;
             contentManager = null;
-            client = null;
             authenticator = null;
             closedAt = new Exception("This session was closed at:");
             storeListener.onLogout(currentUser.getId(), this.toString());
@@ -155,10 +149,6 @@ public class SessionImpl implements Session {
         }
     }
 
-    public StorageClient getClient() {
-        return client;
-    }
-
     public void addCommitHandler(String key, CommitHandler commitHandler) {
         synchronized (commitHandlers) {
             commitHandlers.put(key, commitHandler);
@@ -173,21 +163,8 @@ public class SessionImpl implements Session {
             commitHandlers.clear();
         }
     }
-
-    public Map<String, CacheHolder> getCache(String columnFamily) {
-        if (storageCacheManager != null) {
-            if (configuration.getAuthorizableColumnFamily().equals(columnFamily)) {
-                return storageCacheManager.getAuthorizableCache();
-            }
-            if (configuration.getAclColumnFamily().equals(columnFamily)) {
-                return storageCacheManager.getAccessControlCache();
-            }
-            if (configuration.getContentColumnFamily().equals(columnFamily)) {
-                return storageCacheManager.getContentCache();
-            }
-            return storageCacheManager.getCache(columnFamily);
-        }
-        return null;
+    
+    private Cache<Object, Object> getCache(String cacheName) {
+      return cacheContainer.getCache(cacheName);
     }
-
 }

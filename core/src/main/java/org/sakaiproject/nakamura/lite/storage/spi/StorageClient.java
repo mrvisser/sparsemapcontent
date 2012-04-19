@@ -17,13 +17,12 @@
  */
 package org.sakaiproject.nakamura.lite.storage.spi;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Map;
-
+import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
-import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * Implementations of the SPI need to implement a {@link StorageClientPool} that
@@ -54,7 +53,7 @@ public interface StorageClient {
 	 * @return the key value pairs in the row key or null
 	 * @throws StorageClientException
 	 */
-    Map<String, Object> get(String keySpace, String columnFamily, String key)
+    Map<String, Object> get(String cacheName, String key)
             throws StorageClientException;
 
     /**
@@ -66,7 +65,7 @@ public interface StorageClient {
      * @param probablyNew whether or not the row is probably new
      * @throws StorageClientException
      */
-    void insert(String keySpace, String columnFamily, String key, Map<String, Object> values, boolean probablyNew)
+    void insert(String cacheName, String key, Map<String, Object> values, boolean probablyNew)
             throws StorageClientException;
 
     /**
@@ -76,42 +75,7 @@ public interface StorageClient {
      * @param key the key of the row
      * @throws StorageClientException
      */
-    void remove(String keySpace, String columnFamily, String key) throws StorageClientException;
-
-    /**
-     * Get an {@link InputStream} to read a stream of content.
-     * @param keySpace the keyspace to search
-     * @param columnFamily the group of columns we're considering
-     * @param contentId the id of the content item
-     * @param contentBlockId the block offset
-     * @param streamId the id of the correct stream for this piece of content
-     * @param content the properties of the content item
-     * @return an stream that will read the block
-     * @throws StorageClientException
-     * @throws AccessDeniedException
-     * @throws IOException
-     */
-    InputStream streamBodyOut(String keySpace, String columnFamily, String contentId,
-            String contentBlockId, String streamId, Map<String, Object> content) throws StorageClientException,
-            AccessDeniedException, IOException;
-
-    /**
-     * Write in the body of a piece of content.
-     * @param keySpace the keyspace to search
-     * @param columnFamily the group of columns we're considering
-     * @param contentId the id of the content item
-     * @param contentBlockId the block offset
-     * @param streamId the id of the correct stream for this piece of content
-     * @param content the properties of the content item
-     * @param in a stream pointing to the data
-     * @return the content item after the write it will be modified.
-     * @throws StorageClientException
-     * @throws AccessDeniedException
-     * @throws IOException
-     */
-    Map<String, Object> streamBodyIn(String keySpace, String columnFamily, String contentId,
-            String contentBlockId, String streamId, Map<String, Object> content, InputStream in)
-            throws StorageClientException, AccessDeniedException, IOException;
+    void remove(String cacheName, String key) throws StorageClientException;
 
     /**
      * Search for a piece of content.
@@ -128,21 +92,13 @@ public interface StorageClient {
      * @return an iterator of results
      * @throws StorageClientException
      */
-    DisposableIterator<Map<String, Object>> find(String keySpace, String authorizableColumnFamily,
-            Map<String, Object> properties, DirectCacheAccess cachingManager) throws StorageClientException;
+    DisposableIterator<Map<String, Object>> find(Map<String, Object> properties,
+        DirectCacheAccess cachingManager) throws StorageClientException;
 
     /**
      * Close this client.
      */
     void close();
-
-    /**
-     * Does this content item have a stream body by this id?
-     * @param content
-     * @param streamId
-     * @return whether or not the stream exists for this content item
-     */
-    boolean hasBody( Map<String, Object> content, String streamId);
 
     /**
      * List all objects of the type
@@ -151,7 +107,7 @@ public interface StorageClient {
      * @return a Disposable iterator containing all raw objects of the type in question.
      * @throws StorageClientException 
      */
-    DisposableIterator<SparseRow> listAll(String keySpace, String columnFamily) throws StorageClientException;
+    DisposableIterator<SparseRow> listAll(String cacheName) throws StorageClientException;
 
     /**
      * Count all the objects in a column Family.
@@ -160,8 +116,19 @@ public interface StorageClient {
      * @return the number of objects
      * @throws StorageClientException 
      */
-    long allCount(String keySpace, String columnFamily) throws StorageClientException;
-
+    long allCount(String cacheName) throws StorageClientException;
+    
+    /**
+     * Index the list of index documents.
+     * 
+     * @param keySpace
+     * @param columnFamily
+     * @param documents
+     * @throws StorageClientException
+     */
+    void index(String sourceCacheName, List<IndexDocument> documents)
+        throws StorageClientException;
+    
     void setStorageClientListener(StorageClientListener storageClientListener);
 
 }

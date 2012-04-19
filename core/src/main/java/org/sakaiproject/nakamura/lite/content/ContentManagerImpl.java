@@ -30,23 +30,12 @@ import static org.sakaiproject.nakamura.lite.content.InternalContent.READONLY_FI
 import static org.sakaiproject.nakamura.lite.content.InternalContent.TRUE;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.UUID_FIELD;
 
-import java.io.File;
-import java.io.FileFilter;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.regex.Pattern;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMap.Builder;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.ArrayUtils;
@@ -77,12 +66,23 @@ import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMap.Builder;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import java.io.File;
+import java.io.FileFilter;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * <pre>
@@ -153,7 +153,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
                                                                         LASTMODIFIED_BY_FIELD,
                                                                         UUID_FIELD,
                                                                         PATH_FIELD);
-
+    
     // These properties copied from AccessControlManager to keep from binding
     // directly to the implementation class. They should stay in sync.
     private static final String _SECRET_KEY = "_secretKey";
@@ -170,6 +170,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     private static final String FILE_STREAM_DEFAULT = PREFIX_STREAM;
 
     private GridFilesystem fs;
+    
+    private String[] indexColumnNames;
     
     /**
      * Storage Client
@@ -200,6 +202,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         this.client = client;
         keySpace = config.getKeySpace();
         contentColumnFamily = config.getContentColumnFamily();
+        indexColumnNames = config.getIndexColumnNames();
         closed = false;
         this.eventListener = eventListener;
         String userId = accessControlManager.getCurrentUserId();

@@ -6,13 +6,19 @@ package org.sakaiproject.nakamura.lite.storage.infinispan;
 import org.apache.commons.pool.BasePoolableObjectFactory;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.Service;
-import org.infinispan.Cache;
-import org.infinispan.manager.CacheManager;
+import org.infinispan.manager.CacheContainer;
 import org.infinispan.manager.DefaultCacheManager;
+import org.sakaiproject.nakamura.api.lite.Configuration;
+import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.StorageCacheManager;
 import org.sakaiproject.nakamura.lite.storage.spi.AbstractClientConnectionPool;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * @author Branden
@@ -22,11 +28,21 @@ import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 @Service(value = StorageClientPool.class)
 public class InfinispanStorageClientPool extends AbstractClientConnectionPool {
 
-	private final Cache<String, Object> storage;
+	private final CacheContainer cacheContainer;
 	private final PoolableObjectFactory factory = new ClientConnectionPoolFactory();
 	
+	protected Map<String, IndexDocument> cacheIndexes = new HashMap<String, IndexDocument>();
+	
+	@Reference
+	protected Configuration configuration;
+	
+	@Reference
+	protected CopyOnWriteArrayList<IndexDocument> contentIndexDocuments;
+	
+	
 	public InfinispanStorageClientPool() {
-		storage = (new DefaultCacheManager(true)).getCache();	
+		cacheContainer = new DefaultCacheManager(true);
+		// TODO: Configure the cache container somehow.
 	}
 	
 	public StorageCacheManager getStorageCacheManager() {
@@ -41,7 +57,8 @@ public class InfinispanStorageClientPool extends AbstractClientConnectionPool {
 	public class ClientConnectionPoolFactory extends BasePoolableObjectFactory {
 		@Override
 		public Object makeObject() throws Exception {
-			return new InfinispanStorageClient(storage, getIndexColumns());
+			return new InfinispanStorageClient(cacheContainer, configuration.getIndexColumnFamily(),
+			    cacheIndexes);
 		}
 	}
 }

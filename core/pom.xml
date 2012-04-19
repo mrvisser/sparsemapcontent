@@ -64,7 +64,7 @@
 							*
 						</Import-Package>
 						<Private-Package>org.sakaiproject.nakamura.lite.*</Private-Package>
-						<Embed-Dependency>infinispan-core</Embed-Dependency>
+						<Embed-Dependency>infinispan-core,infinispan-query</Embed-Dependency>
 					</instructions>
 				</configuration>
 			</plugin>
@@ -175,6 +175,12 @@
             <artifactId>infinispan-core</artifactId>
             <version>5.1.3.FINAL</version>
         </dependency>
+        <dependency>
+            <groupId>org.infinispan</groupId>
+            <artifactId>infinispan-query</artifactId>
+            <version>5.1.3.FINAL</version>
+        </dependency>
+        
 		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>servlet-api</artifactId>

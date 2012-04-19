@@ -127,8 +127,7 @@ public class RepositoryImpl implements Repository {
             if (currentUser == null) {
                 throw new StorageClientException("User " + username + " cant login with password");
             }
-            return new SessionImpl(this, currentUser, client, configuration,
-                    clientPool.getStorageCacheManager(), storeListener, principalValidatorResolver);
+            return new SessionImpl(this, currentUser, client, configuration, storeListener, principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
             throw e;
@@ -162,8 +161,8 @@ public class RepositoryImpl implements Repository {
                 throw new StorageClientException("User " + username
                         + " does not exist, cant login administratively as this user");
             }
-            return new SessionImpl(this, currentUser, client, configuration,
-                    clientPool.getStorageCacheManager(), storeListener, principalValidatorResolver);
+            return new SessionImpl(this, currentUser, client, configuration, storeListener,
+                principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
             throw e;
@@ -190,8 +189,8 @@ public class RepositoryImpl implements Repository {
                 throw new StorageClientException("User " + username
                         + " does not exist, cant login administratively as this user");
             }
-            return new SessionImpl(this, currentUser, client, configuration,
-                    clientPool.getStorageCacheManager(), storeListener, principalValidatorResolver);
+            return new SessionImpl(this, currentUser, client, configuration, storeListener,
+                principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
             throw e;

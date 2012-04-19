@@ -53,6 +53,11 @@ public interface Configuration {
     String getContentColumnFamily();
 
     /**
+     * @return name of the column family used for index storage.
+     */
+    String getIndexColumnFamily();
+    
+    /**
      * @return name of the lock column family.
      */
     String getLockColumnFamily();
@@ -61,16 +66,5 @@ public interface Configuration {
      * @return the config, shared by all drivers.
      */
     Map<String, String> getSharedConfig();
-
-    /**
-     * @return an array of properties names that should be indexed.
-     */
-    String[] getIndexColumnNames();
-
-    /**
-     * 
-     * @return an array of index column types
-     */
-    String[] getIndexColumnTypes();
 
 }
