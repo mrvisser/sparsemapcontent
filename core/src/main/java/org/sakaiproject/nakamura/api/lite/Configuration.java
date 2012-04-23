@@ -33,12 +33,6 @@ public interface Configuration {
     String getAclColumnFamily();
 
     /**
-     * @return name of the Keyspace used by the sparse content store. In an
-     *         RDBMS environment could be used as the tablespace name.
-     */
-    String getKeySpace();
-
-    /**
      * @return name of the column family used for Authorizable Storage, in an
      *         RDBMS environment might be used to form the basis for tables
      *         storing Authorizables.
@@ -46,21 +40,24 @@ public interface Configuration {
     String getAuthorizableColumnFamily();
 
     /**
-     * @return name of the column family used for Content Storage, in an
-     *         RDBMS environment might be used to form the basis for tables
-     *         storing Content objects.
+     * @return name for the cache that holds ACLs and Authorizables.
      */
-    String getContentColumnFamily();
-
-    /**
-     * @return name of the column family used for index storage.
-     */
-    String getIndexColumnFamily();
+    String getAuthCacheName();
     
     /**
-     * @return name of the lock column family.
+     * @return name for the content body cache
      */
-    String getLockColumnFamily();
+    String getContentBodyCacheName();
+    
+    /**
+     * @return name for the content metadata (i.e., path / structure data) cache
+     */
+    String getContentMetadataName();
+    
+    /**
+     * @return name of the index storage cache.
+     */
+    String getIndexCacheName();
     
    /**
      * @return the config, shared by all drivers.

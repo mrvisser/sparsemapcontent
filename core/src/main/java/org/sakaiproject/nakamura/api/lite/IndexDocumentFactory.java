@@ -17,9 +17,6 @@
  */
 package org.sakaiproject.nakamura.api.lite;
 
-import org.sakaiproject.nakamura.api.lite.content.ContentManager;
-
-import java.io.Serializable;
 import java.util.Map;
 
 /**
@@ -35,18 +32,5 @@ public interface IndexDocumentFactory {
    * @return An index document that can be indexed in lucene.
    */
   IndexDocument createIndexDocument(String path, Map<String, Object> properties);
-  
-  /**
-   * For a given content property key, provide the name of the field (bean notation) that is mapped
-   * to the property within this document. If the requested content property is not mapped (i.e.,
-   * it is not indexed), simply return null.
-   * 
-   * This is only used to reverse-engineer the current API for finding content on the
-   * {@link ContentManager#find(Map)} method. If this changes to allow richer lucene searching
-   * capabilities, then this method may be obsolete.
-   * 
-   * @param contentProperty The content field with which to look up the index document property name.
-   * @return The index document property name that is associated to the content property.
-   */
-  String getFieldForContentProperty(String contentProperty);
+
 }

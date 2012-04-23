@@ -31,7 +31,6 @@ import static org.sakaiproject.nakamura.lite.content.InternalContent.TRUE;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.UUID_FIELD;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -40,13 +39,15 @@ import com.google.common.collect.Sets;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.lucene.search.Query;
 import org.infinispan.io.GridFilesystem;
+import org.infinispan.query.QueryIterator;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.Configuration;
+import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
-import org.sakaiproject.nakamura.api.lite.StorageConstants;
 import org.sakaiproject.nakamura.api.lite.StoreListener;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessControlManager;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
@@ -61,7 +62,6 @@ import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.api.lite.content.ContentManager;
 import org.sakaiproject.nakamura.api.lite.util.PreemptiveIterator;
 import org.sakaiproject.nakamura.lite.CachingManagerImpl;
-import org.sakaiproject.nakamura.lite.storage.spi.DisposableIterator;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -179,17 +179,10 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
      * The access control manager in use.
      */
     private AccessControlManager accessControlManager;
-    /**
-     * Key space for this content.
-     */
-    private String keySpace;
-    
-    private String contentColumnFamily;
-    
+
     private boolean closed;
 
     private StoreListener eventListener;
- 
 
     private PathPrincipalTokenResolver pathPrincipalResolver;
 
@@ -198,9 +191,6 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         super(client, sharedCache);
         this.fs = fs;
         this.client = client;
-        keySpace = config.getKeySpace();
-        contentColumnFamily = config.getContentColumnFamily();
-        indexColumnNames = config.getIndexColumnNames();
         closed = false;
         this.eventListener = eventListener;
         String userId = accessControlManager.getCurrentUserId();
@@ -249,76 +239,77 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     public Iterator<Content> listChildren(String path) throws StorageClientException {
     	if (!exists(path))
     		return (new LinkedList<Content>()).iterator();
-    	
-		final String[] children = fs.getFile(path).list();
-		if (ArrayUtils.isEmpty(children))
-			return (new LinkedList<Content>()).iterator();
-		
-		return new PreemptiveIterator<Content>() {
-			int i = 0;
-			private Content content;
-			
-			@Override
-			protected boolean internalHasNext() {
-				content = null;
-				while (content == null && i < children.length) {
-					int current = i++;
-					try {
-						content = get(children[current]);
-					} catch (StorageClientException e) {
-						LOGGER.debug("Generic error iterating over child {}", children[current]);
-					} catch (AccessDeniedException e) {
-						LOGGER.debug("Access denied iterating over child {}", children[current]);
-					}
-				}
-				if (content == null) {
-					super.close();
-					return false;
-				}
-				return true;
-			}
-
-			@Override
-			protected Content internalNext() {
-				return content;
-			}
-		};
+      	
+  		final String[] children = fs.getFile(path).list();
+  		if (ArrayUtils.isEmpty(children))
+  			return (new LinkedList<Content>()).iterator();
+  		
+  		return new PreemptiveIterator<Content>() {
+  			int i = 0;
+  			private Content content;
+  			
+  			@Override
+  			protected boolean internalHasNext() {
+  				content = null;
+  				while (content == null && i < children.length) {
+  					int current = i++;
+  					try {
+  						content = get(children[current]);
+  					} catch (StorageClientException e) {
+  						LOGGER.debug("Generic error iterating over child {}", children[current]);
+  					} catch (AccessDeniedException e) {
+  						LOGGER.debug("Access denied iterating over child {}", children[current]);
+  					}
+  				}
+  				if (content == null) {
+  					super.close();
+  					return false;
+  				}
+  				return true;
+  			}
+  
+  			@Override
+  			protected Content internalNext() {
+  				return content;
+  			}
+  		};
     }
 
     public Iterator<String> listChildPaths(final String path) throws StorageClientException {
-        if (!exists(path))
-        	return (new LinkedList<String>()).iterator();
-        
-        final String[] children = fs.getFile(path).list();
-		if (ArrayUtils.isEmpty(children))
-			return (new LinkedList<String>()).iterator();
-		
-		return new PreemptiveIterator<String>() {
-			int i = 0;
-			private String nextPath;
-			
-			@Override
-			protected boolean internalHasNext() {
-				nextPath = null;
-				while (nextPath == null && i < children.length) {
-					int current = i++;
-					if (exists(children[current])) {
-						nextPath = children[current];
-						break;
-					}
-				}
-				if (nextPath == null) {
-					super.close();
-					return false;
-				}
-				return true;
-			}
-
-			@Override
-			protected String internalNext() {
-				return nextPath;
-			}
-		};
+      if (!exists(path))
+      	return (new LinkedList<String>()).iterator();
+      
+      final String[] children = fs.getFile(path).list();
+      
+  		if (ArrayUtils.isEmpty(children))
+  			return (new LinkedList<String>()).iterator();
+  		
+  		return new PreemptiveIterator<String>() {
+  			int i = 0;
+  			private String nextPath;
+  			
+  			@Override
+  			protected boolean internalHasNext() {
+  				nextPath = null;
+  				while (nextPath == null && i < children.length) {
+  					int current = i++;
+  					if (exists(children[current])) {
+  						nextPath = children[current];
+  						break;
+  					}
+  				}
+  				if (nextPath == null) {
+  					super.close();
+  					return false;
+  				}
+  				return true;
+  			}
+  
+  			@Override
+  			protected String internalNext() {
+  				return nextPath;
+  			}
+  		};
     }
     
     public void triggerRefresh(String path) throws StorageClientException, AccessDeniedException {
@@ -351,7 +342,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     		File file = fs.getFile(path);
     		FileFilter liveContentFileFilter = new LiveContentFileFilter();
     		for (File child : file.listFiles(liveContentFileFilter)) {
-				triggerRefreshAll(child.getAbsolutePath());
+    		  triggerRefreshAll(child.getAbsolutePath());
     		}
     		try {
 	    		triggerRefresh(path);
@@ -738,27 +729,26 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         return LOGGER;
     }
 
-    public Iterable<Content> find(Map<String, Object> searchProperties) throws StorageClientException,
+    public Iterable<Content> find(final Query query) throws StorageClientException,
         AccessDeniedException {
       checkOpen();
-      final Map<String, Object> finalSearchProperties = searchProperties;
       return new Iterable<Content>() {
-
         public Iterator<Content> iterator() {
             Iterator<Content> contentResultsIterator = null;
             try {
-              final DisposableIterator<Map<String,Object>> clientSearchKeysIterator = client.find(keySpace, contentColumnFamily, finalSearchProperties, ContentManagerImpl.this);
+              final QueryIterator documents = client.find(query);
+              
               contentResultsIterator = new PreemptiveIterator<Content>() {
-                  Content contentResult;
+                  private Content contentResult;
 
                   protected boolean internalHasNext() {
                       contentResult = null;
-                      while (contentResult == null && clientSearchKeysIterator.hasNext()) {
+                      while (contentResult == null && documents.hasNext()) {
                           try {
-                              Map<String, Object> structureMap = clientSearchKeysIterator.next();
-                              LOGGER.debug("Loaded Next as {} ", structureMap);
-                              if ( exists(structureMap) ) {
-                                  String path = (String) structureMap.get(PATH_FIELD);
+                              IndexDocument document = (IndexDocument) documents.next();
+                              LOGGER.debug("Loaded Next as {} ", document);
+                              if ( exists(document.getId()) ) {
+                                  String path = document.getId();
                                   contentResult = get(path);
                               }
                           } catch (AccessDeniedException e) {
@@ -780,8 +770,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
                   
                   @Override
                   public void close() {
-                      clientSearchKeysIterator.close();
-                      super.close();
+                    documents.close();
+                    super.close();
                   };
               };
             } catch (StorageClientException e) {
@@ -792,26 +782,18 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     };
     }
     
-    public int count(Map<String, Object> countSearch) throws StorageClientException {
-        Builder<String, Object> b = ImmutableMap.builder();
-        b.putAll(countSearch);
-        b.put(StorageConstants.CUSTOM_STATEMENT_SET, "countestimate");
-        b.put(StorageConstants.RAWRESULTS, true);
-        DisposableIterator<Map<String,Object>> counts = client.find(keySpace, contentColumnFamily, b.build(), ContentManagerImpl.this);
-        try {
-            Map<String, Object> count = counts.next();
-            return Integer.parseInt(String.valueOf(count.get("1")));
-        } finally {
-            if ( counts != null ) {
-                counts.close();
-            }
-        }
+    public int count(Query query) throws StorageClientException {
+      return client.count(query);
     }
 
 
     public boolean hasBody(String path, String streamId) throws StorageClientException, AccessDeniedException {
-        Content content = get(path);
-        return client.hasBody(content.getProperties(), streamId);
+        if (!exists(path)) {
+          return false;
+        }
+        String streamPath = StorageClientUtils.newPath(path, getStreamFileNameByStreamId(streamId));
+        File streamFile = fs.getFile(streamPath);
+        return streamFile.exists();
     }
 
     public void setPrincipalTokenResolver(PrincipalTokenResolver principalTokenResolver) {
@@ -893,6 +875,13 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       return moved;
     }
     
+    /**
+     * TODO: Probably a good idea to cache the serialized content objects, instead of rely entirely
+     * on the distributed binary body cache.
+     * 
+     * @param path
+     * @return
+     */
     private Map<String, Object> getFileProperties(String path) {
         File directory = fs.getFile(path);
         if (!directory.exists())
@@ -905,7 +894,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         ObjectInputStream pin = null;
         try {
         	pin = new ObjectInputStream(fs.getInput(propertiesFile));
-        	return (Map<String, Object>)pin.readObject();
+        	return (Map<String, Object>) pin.readObject();
         } catch (IOException e) {
         	LOGGER.warn("Received exception trying to load file properties.", e);
         } catch (ClassNotFoundException e) {
@@ -972,22 +961,13 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     }
 
     /**
-     * A file filter to help determine what is a file that should be versioned.
-     */
-    private class VersionableFileFilter implements FileFilter {
-		public boolean accept(File pathname) {
-			return pathname.isFile() && pathname.getName().startsWith(PREFIX_CONTENT);
-		}
-    }
-    
-    /**
      * A file filter to help identify what is a live piece of externally-visible path content,
      * and what is a system/internal file or folder.
      */
     private class LiveContentFileFilter implements FileFilter {
-		public boolean accept(File pathname) {
-			return pathname.isDirectory() && !pathname.getName().startsWith(PREFIX_CONTENT);
-		}
+  		public boolean accept(File pathname) {
+  			return pathname.isDirectory() && !pathname.getName().startsWith(PREFIX_CONTENT);
+  		}
     }
     
     /**
@@ -1002,8 +982,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     	 * @see java.io.FileFilter#accept(java.io.File)
     	 */
     	public boolean accept(File pathname) {
-			return pathname.isFile() && pathname.getName().startsWith(PREFIX_STREAM);
-		}
+  			return pathname.isFile() && pathname.getName().startsWith(PREFIX_STREAM);
+  		}
     	
     	/**
     	 * Get the target streamId from the given stream file name.
@@ -1025,24 +1005,24 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     	private final Pattern PATTERN_VERSION = Pattern.compile(String.format(
     			"%s:([0-9]+)", PREFIX_VERSION));
     			
-		/* (non-Javadoc)
-		 * 
-		 * Determine whether or not the given file is a version store for another file.
-		 *  
-		 * @see java.io.FileFilter#accept(java.io.File)
-		 */
-		public boolean accept(File pathname) {
-			return PATTERN_VERSION.matcher(pathname.getName()).matches();
-		}
-		
-		/**
-		 * Get the version number the given filename represents.
-		 * 
-		 * @param fileName
-		 * @return
-		 */
-		public Integer getVersionNumber(String fileName) {
-			return Integer.valueOf(PATTERN_VERSION.matcher(fileName).group(1));
-		}
+  		/* (non-Javadoc)
+  		 * 
+  		 * Determine whether or not the given file is a version store for another file.
+  		 *  
+  		 * @see java.io.FileFilter#accept(java.io.File)
+  		 */
+  		public boolean accept(File pathname) {
+  			return PATTERN_VERSION.matcher(pathname.getName()).matches();
+  		}
+  		
+  		/**
+  		 * Get the version number the given filename represents.
+  		 * 
+  		 * @param fileName
+  		 * @return
+  		 */
+  		public Integer getVersionNumber(String fileName) {
+  			return Integer.valueOf(PATTERN_VERSION.matcher(fileName).group(1));
+  		}
     }
 }

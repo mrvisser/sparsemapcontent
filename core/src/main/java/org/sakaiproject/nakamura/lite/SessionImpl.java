@@ -19,9 +19,7 @@ package org.sakaiproject.nakamura.lite;
 
 import com.google.common.collect.Maps;
 
-import org.infinispan.Cache;
-import org.infinispan.manager.CacheContainer;
-import org.sakaiproject.nakamura.api.lite.CacheHolder;
+import org.infinispan.io.GridFilesystem;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.CommitHandler;
 import org.sakaiproject.nakamura.api.lite.Configuration;
@@ -54,42 +52,29 @@ public class SessionImpl implements Session {
     private User currentUser;
     private Repository repository;
     private Exception closedAt;
-    private CacheContainer cacheContainer;
     private Authenticator authenticator;
     private StoreListener storeListener;
     private Map<String, CommitHandler> commitHandlers = Maps.newLinkedHashMap();
-    private Configuration configuration;
-    private static long nagclient;
 
     public SessionImpl(Repository repository, User currentUser, StorageClient client,
-        CacheContainer cacheContainer, Configuration configuration, StoreListener storeListener,
-            PrincipalValidatorResolver principalValidatorResolver) throws ClientPoolException,
-            StorageClientException, AccessDeniedException {
+        GridFilesystem fs, Configuration configuration, StoreListener storeListener,
+        PrincipalValidatorResolver principalValidatorResolver) throws ClientPoolException,
+        StorageClientException, AccessDeniedException {
+      
         this.currentUser = currentUser;
         this.repository = repository;
-        this.cacheContainer = cacheContainer;
         this.storeListener = storeListener;
-        this.configuration = configuration;
-        
-        if ( this.storageCacheManager == null ) {
-            if ( (nagclient % 1000) == 0 ) {
-                LOGGER.warn("No Cache Manager, All Caching disabled, please provide an Implementation of NamedCacheManager. This message will appear every 1000th time a session is created. ");
-            }
-            nagclient++;
-        }
         
         accessControlManager = new AccessControlManagerImpl(client, currentUser, configuration,
-                getCache(configuration.getAclColumnFamily()), storeListener,
-                principalValidatorResolver);
-        Map<String, CacheHolder> authorizableCache = getCache(configuration
-                .getAuthorizableColumnFamily());
+                null, storeListener, principalValidatorResolver);
+        
         authorizableManager = new AuthorizableManagerImpl(currentUser, this, client, configuration,
-                accessControlManager, authorizableCache, storeListener);
+                accessControlManager, null, storeListener);
 
-        contentManager = new ContentManagerImpl(client, accessControlManager, configuration,
-                getCache(configuration.getContentColumnFamily()), storeListener);
+        contentManager = new ContentManagerImpl(fs, client, accessControlManager, configuration,
+                null, storeListener);
 
-        authenticator = new AuthenticatorImpl(client, configuration, authorizableCache);
+        authenticator = new AuthenticatorImpl(client, configuration, null);
 
         storeListener.onLogin(currentUser.getId(), this.toString());
     }
@@ -162,9 +147,5 @@ public class SessionImpl implements Session {
             }
             commitHandlers.clear();
         }
-    }
-    
-    private Cache<Object, Object> getCache(String cacheName) {
-      return cacheContainer.getCache(cacheName);
     }
 }

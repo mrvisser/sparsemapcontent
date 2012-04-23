@@ -63,10 +63,10 @@ public interface ContentManager {
     /**
      * Counts the maximum number of results a find operation could return, ignoring access control. This method may cause problems
      * if used inappropriately on sets of results that are mostly not readable by the current user (eg how many documents are there with "ieb" and "your fired" in ?)
-     * @param searchProperties Map the same as the finder
+     * @param query The query whose results to count
      * @return maximum number of results a find could return.
      */
-    int count(Map<String, Object> countSearch) throws StorageClientException;
+    int count(Query query) throws StorageClientException;
 
     /**
      * Save the current version of the content object including metadata and

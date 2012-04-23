@@ -17,6 +17,8 @@
  */
 package org.sakaiproject.nakamura.lite.storage.spi;
 
+import org.apache.lucene.search.Query;
+import org.infinispan.query.QueryIterator;
 import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
@@ -78,24 +80,25 @@ public interface StorageClient {
     void remove(String cacheName, String key) throws StorageClientException;
 
     /**
-     * Search for a piece of content.
+     * Search for indexed content.
      * 
-     * @param keySpace
-     *            the keyspace to search
-     * @param authorizableColumnFamily
-     *            the id of the column family
-     * @param properties
-     *            column and values to search
-     * @param cachingManager
-     *            if set to a CachingManagerImpl that implements DirectCacheAccess,
-     *            the cache will be consulted before accessing the storage.
+     * @param query The lucene query with which to search the index cache.
      * @return an iterator of results
      * @throws StorageClientException
      */
-    DisposableIterator<Map<String, Object>> find(String keySpace, String authorizableColumnFamily,
-        Map<String, Object> properties, DirectCacheAccess cachingManager)
-        throws StorageClientException;
+    QueryIterator find(Query query) throws StorageClientException;
 
+    /**
+     * Find the <b>maximum</b> number of results that could be returned in a query. This ignores
+     * access control, therefore this number may be significantly different than the number of
+     * results returned when executing {@link #find(Query)}.
+     * 
+     * @param query
+     * @return
+     * @throws StorageClientException
+     */
+    int count(Query query) throws StorageClientException;
+    
     /**
      * Close this client.
      */

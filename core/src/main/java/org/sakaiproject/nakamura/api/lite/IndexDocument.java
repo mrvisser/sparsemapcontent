@@ -22,16 +22,21 @@ import java.io.Serializable;
 /**
  *
  */
-public class IndexDocument implements Serializable {
-  private static final long serialVersionUID = -3564647507423596468L;
+public interface IndexDocument extends Serializable {
   
-  private String id;
+  /**
+   * @return the id that was set by executing {@link #setId()}
+   */
+  String getId();
   
-  public final String getId() {
-    return this.id;
-  }
-  
-  public final void setId(String id) {
-    this.id = id;
-  }
+  /**
+   * Set the id of the IndexDocument. This invocation must set the stored ID of the index document
+   * such that any subsequent calls to {@link #getId()} result in what was set here, either
+   * immediately after invocation, or when the document is retrieved through a search.
+   * 
+   * In other words, when implementing this interface, make sure that the {@code id} field is
+   * a stored field, and ensure that {@link #setId(String)} and {@link #getId()} set and get
+   * the {@code id} field, respectively.
+   */
+  void setId(String id);
 }

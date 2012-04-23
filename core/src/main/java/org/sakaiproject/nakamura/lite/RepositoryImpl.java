@@ -21,10 +21,18 @@ import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
 import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.Service;
+import org.infinispan.Cache;
+import org.infinispan.io.GridFile.Metadata;
+import org.infinispan.io.GridFilesystem;
+import org.infinispan.manager.CacheContainer;
+import org.infinispan.manager.DefaultCacheManager;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.Configuration;
+import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.Session;
 import org.sakaiproject.nakamura.api.lite.StorageCacheManager;
@@ -35,39 +43,54 @@ import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorResolv
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
+import org.sakaiproject.nakamura.lite.storage.infinispan.InfinispanStorageClientPool;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Component(immediate = true, metatype = true)
 @Service(value = Repository.class)
 public class RepositoryImpl implements Repository {
-
+  
     private static final Logger LOGGER = LoggerFactory.getLogger(RepositoryImpl.class);
 
     @Reference
     protected Configuration configuration;
 
-    @Reference
-    protected StorageClientPool clientPool;
-
+    /**
+     * A list of index document factories that describes, what content should be indexed and how to
+     * index it.
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL_MULTIPLE,
+        policy = ReferencePolicy.DYNAMIC, referenceInterface = IndexDocumentFactory.class,
+        bind = "bindIndexDocumentFactory", unbind = "unbindIndexDocumentFactory")
+    protected CopyOnWriteArrayList<IndexDocumentFactory> indexes =
+        new CopyOnWriteArrayList<IndexDocumentFactory>();
+    
     @Reference
     protected StoreListener storeListener;
 
     @Reference
     protected PrincipalValidatorResolver principalValidatorResolver;
 
+    protected CacheContainer cacheContainer;
+    
+    protected GridFilesystem fs;
+    
+    protected StorageClientPool clientPool;
+    
     public RepositoryImpl() {
     }
 
     public RepositoryImpl(Configuration configuration, StorageClientPool clientPool,
             LoggingStorageListener listener) {
-        this.configuration = configuration;
-        this.clientPool = clientPool;
-        this.storeListener = listener;
+      this.configuration = configuration;
+      this.clientPool = clientPool;
+      this.storeListener = listener;
     }
 
     @Activate
@@ -75,10 +98,25 @@ public class RepositoryImpl implements Repository {
             StorageClientException, AccessDeniedException {
         StorageClient client = null;
         try {
-            client = clientPool.getClient();
-            AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
-                    configuration);
-            authorizableActivator.setup();
+          // set up the caches
+          cacheContainer = new DefaultCacheManager(true);
+          //TODO: configure the cache container
+          
+          clientPool = new InfinispanStorageClientPool(cacheContainer, configuration, indexes);
+          client = clientPool.getClient();
+            
+          // setup the authorizables
+          AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
+              configuration);
+          authorizableActivator.setup();
+          
+          // set up the content store
+          Cache<String, byte[]> contentBodyCache = cacheContainer.getCache(
+              configuration.getContentBodyCacheName());
+          Cache<String, Metadata> contentMetadataCache = cacheContainer.getCache(
+              configuration.getContentMetadataName());
+          fs = new GridFilesystem(contentBodyCache, contentMetadataCache);
+            
         } finally {
             if (client != null) {
                 client.close();
@@ -90,6 +128,8 @@ public class RepositoryImpl implements Repository {
 
     @Deactivate
     public void deactivate(Map<String, Object> properties) throws ClientPoolException {
+      if (cacheContainer != null)
+        cacheContainer.stop();
     }
 
     public Session login(String username, String password) throws ClientPoolException,
@@ -127,7 +167,8 @@ public class RepositoryImpl implements Repository {
             if (currentUser == null) {
                 throw new StorageClientException("User " + username + " cant login with password");
             }
-            return new SessionImpl(this, currentUser, client, configuration, storeListener, principalValidatorResolver);
+            return new SessionImpl(this, currentUser, client, fs, configuration, storeListener,
+                principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
             throw e;
@@ -161,7 +202,7 @@ public class RepositoryImpl implements Repository {
                 throw new StorageClientException("User " + username
                         + " does not exist, cant login administratively as this user");
             }
-            return new SessionImpl(this, currentUser, client, configuration, storeListener,
+            return new SessionImpl(this, currentUser, client, fs, configuration, storeListener,
                 principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
@@ -189,7 +230,7 @@ public class RepositoryImpl implements Repository {
                 throw new StorageClientException("User " + username
                         + " does not exist, cant login administratively as this user");
             }
-            return new SessionImpl(this, currentUser, client, configuration, storeListener,
+            return new SessionImpl(this, currentUser, client, fs, configuration, storeListener,
                 principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
@@ -217,6 +258,14 @@ public class RepositoryImpl implements Repository {
     public void setStorageListener(StoreListener storeListener) {
         this.storeListener = storeListener;
 
+    }
+    
+    protected void bindIndexDocumentFactory(IndexDocumentFactory factory) {
+      indexes.add(factory);
+    }
+
+    protected void unbindIndexDocumentFactory(IndexDocumentFactory factory) {
+      indexes.remove(factory);
     }
 
 }

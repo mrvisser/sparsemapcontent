@@ -36,18 +36,18 @@ import org.slf4j.LoggerFactory;
 public class AuthenticatorImpl extends CachingManagerImpl implements Authenticator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AuthenticatorImpl.class);
-    private String keySpace;
+    private String authCacheName;
     private String authorizableColumnFamily;
 
     public AuthenticatorImpl(StorageClient client, Configuration configuration, Map<String, CacheHolder> sharedCache) {
         super(client, sharedCache);
-        this.keySpace = configuration.getKeySpace();
+        this.authCacheName = configuration.getAuthCacheName();
         this.authorizableColumnFamily = configuration.getAuthorizableColumnFamily();
     }
 
     public User authenticate(String userid, String password) {
         try {
-            Map<String, Object> userAuthMap = getCached(keySpace, authorizableColumnFamily, userid);
+            Map<String, Object> userAuthMap = getCached(authCacheName, authorizableColumnFamily, userid);
             if (userAuthMap == null) {
                 LOGGER.debug("User was not found {}", userid);
                 return null;
@@ -79,7 +79,7 @@ public class AuthenticatorImpl extends CachingManagerImpl implements Authenticat
 
     private User internalSystemAuthenticate(String userid, boolean forceEnableLogin) {
         try {
-            Map<String, Object> userAuthMap = getCached(keySpace, authorizableColumnFamily, userid);
+            Map<String, Object> userAuthMap = getCached(authCacheName, authorizableColumnFamily, userid);
             if (userAuthMap == null || userAuthMap.size() == 0) {
                 LOGGER.debug("User was not found {}", userid);
                 return null;

@@ -69,7 +69,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
     private static final Set<String> PROTECTED_PROPERTIES = ImmutableSet.of(_SECRET_KEY);
     private static final Set<String> READ_ONLY_PROPERTIES = ImmutableSet.of(_SECRET_KEY, _PATH, _OBJECT_TYPE, _KEY);
     private User user;
-    private String keySpace;
+    private String authCacheName;
     private String aclColumnFamily;
     private Map<String, int[]> cache = new ConcurrentHashMap<String, int[]>();
     private boolean closed;
@@ -87,7 +87,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
         super(client, sharedCache);
         this.user = currentUser;
         this.aclColumnFamily = config.getAclColumnFamily();
-        this.keySpace = config.getKeySpace();
+        this.authCacheName = config.getAuthCacheName();
         closed = false;
         this.storeListener = storeListener;
         principalTokenValidator = new PrincipalTokenValidator(principalValidatorResolver);
@@ -100,7 +100,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
         check(objectType, objectPath, Permissions.CAN_READ_ACL);
 
         String key = this.getAclKey(objectType, objectPath);
-        return StorageClientUtils.getFilterMap(getCached(keySpace, aclColumnFamily, key), null, null, PROTECTED_PROPERTIES, false);
+        return StorageClientUtils.getFilterMap(getCached(authCacheName, aclColumnFamily, key), null, null, PROTECTED_PROPERTIES, false);
     }
 
     /**
@@ -116,7 +116,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
         compilingPermissions.inc();
         try {
             String key = this.getAclKey(objectType, objectPath);
-            Map<String, Object> objectAcl = getCached(keySpace, aclColumnFamily, key);
+            Map<String, Object> objectAcl = getCached(authCacheName, aclColumnFamily, key);
             Set<String> orderedPrincipals = Sets.newLinkedHashSet();
             {
                 String principal = user.getId();
@@ -188,7 +188,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
         check(Security.ZONE_CONTENT, objectPath, Permissions.CAN_WRITE_ACL);
         check(Security.ZONE_CONTENT, objectPath, Permissions.CAN_READ_ACL);
         String key = this.getAclKey(securityZone, objectPath);
-        Map<String, Object> currentAcl = getCached(keySpace, aclColumnFamily, key);
+        Map<String, Object> currentAcl = getCached(authCacheName, aclColumnFamily, key);
         String secretKey = (String) currentAcl.get(_SECRET_KEY);
         principalTokenValidator.signToken(token, secretKey);
         // the caller must save the target.
@@ -201,7 +201,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
         check(objectType, objectPath, Permissions.CAN_WRITE_ACL);
         check(objectType, objectPath, Permissions.CAN_READ_ACL);
         String key = this.getAclKey(objectType, objectPath);
-        Map<String, Object> currentAcl = getCached(keySpace, aclColumnFamily, key);
+        Map<String, Object> currentAcl = getCached(authCacheName, aclColumnFamily, key);
         if ( currentAcl == null ) {
             currentAcl = Maps.newHashMap();
         }
@@ -265,7 +265,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
             }
         }
         LOGGER.debug("Updating ACL {} {} ", key, modifications);
-        putCached(keySpace, aclColumnFamily, key, modifications, (currentAcl == null || currentAcl.size() == 0));
+        putCached(authCacheName, aclColumnFamily, key, modifications, (currentAcl == null || currentAcl.size() == 0));
         storeListener.onUpdate(objectType, objectPath,  getCurrentUserId(), "type:acl", false, null, "op:acl");
         // clear the compiled cache for this session.
         List<String> keys = Lists.newArrayList();
@@ -350,7 +350,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
         try {
             // we need to allow the permissions compile to bypass access control as it needs to see everything.
             compilingPermissions.inc();
-            Map<String, Object> acl = getCached(keySpace, aclColumnFamily, key);
+            Map<String, Object> acl = getCached(authCacheName, aclColumnFamily, key);
             LOGGER.debug("ACL on {} is {} ", key, acl);
     
             int grants = 0;
@@ -631,7 +631,7 @@ public class AccessControlManagerImpl extends CachingManagerImpl implements Acce
         Map<String, int[]> compiledPermissions = Maps.newHashMap();
         String key = getAclKey(objectType, objectPath);
 
-        Map<String, Object> acl = getCached(keySpace, aclColumnFamily, key);
+        Map<String, Object> acl = getCached(authCacheName, aclColumnFamily, key);
 
         if (acl != null) {
             LOGGER.debug("Checking {} {} ",key,acl);

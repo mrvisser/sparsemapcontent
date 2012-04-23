@@ -67,10 +67,10 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
      * @return the object or null if not cached and not found
      * @throws StorageClientException
      */
-    protected Map<String, Object> getCached(String keySpace, String columnFamily, String key)
+    protected Map<String, Object> getCached(String cacheName, String columnFamily, String key)
             throws StorageClientException {
         Map<String, Object> m = null;
-        String cacheKey = getCacheKey(keySpace, columnFamily, key);
+        String cacheKey = getCacheKey(cacheName, columnFamily, key);
 
         CacheHolder cacheHolder = getFromCacheInternal(cacheKey);
         if (cacheHolder != null ) {
@@ -80,7 +80,7 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
             }
         }
         if (m == null) {
-            m = client.get(keySpace, columnFamily, key);
+            m = client.get(cacheName, cacheKey);
             if (m != null) {
                 LOGGER.debug("Cache Miss, Found Map {} {}", cacheKey, m);
             }
@@ -134,10 +134,7 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
      * @throws StorageClientException 
      */
     private String getCacheKey(String keySpace, String columnFamily, String key) throws StorageClientException {
-        if ( client instanceof RowHasher) {
-            return ((RowHasher) client).rowHash(keySpace, columnFamily, key);
-        }
-        return keySpace + ":" + columnFamily + ":" + key;
+        return columnFamily + ":" + key;
     }
 
     /**
@@ -149,10 +146,10 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
      * @param key
      * @throws StorageClientException 
      */
-    protected void removeCached(String keySpace, String columnFamily, String key) throws StorageClientException {
+    protected void removeCached(String cacheName, String columnFamily, String key) throws StorageClientException {
+        final String cacheKey = getCacheKey(cacheName, columnFamily, key);
         if (sharedCache != null) {
             // insert a replacement. This should cause an invalidation message to propagate in the cluster.
-            final String cacheKey = getCacheKey(keySpace, columnFamily, key);
             putToCacheInternal(cacheKey, new CacheHolder(null, managerId), false);
             LOGGER.debug("Marked as deleted in Cache {} ", cacheKey);
             if ( client instanceof Disposer ) {
@@ -177,8 +174,7 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
                 }); 
             }
         }
-        client.remove(keySpace, columnFamily, key);
-
+        client.remove(cacheName, cacheKey);
     }
 
     /**
@@ -190,13 +186,10 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
      * @param probablyNew whether or not this object is new.
      * @throws StorageClientException
      */
-    protected void putCached(String keySpace, String columnFamily, String key,
+    protected void putCached(String cacheName, String columnFamily, String key,
             Map<String, Object> encodedProperties, boolean probablyNew)
             throws StorageClientException {
-        String cacheKey = null;
-        if ( sharedCache != null ) {
-            cacheKey = getCacheKey(keySpace, columnFamily, key);
-        }
+        String cacheKey = getCacheKey(cacheName, columnFamily, key);
         if ( sharedCache != null && !probablyNew ) {
             CacheHolder ch = getFromCacheInternal(cacheKey);
             if ( ch != null && ch.isLocked(this.managerId) ) {
@@ -221,9 +214,9 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
                 // let the null Cache holder last for 10s, and during that time only the CachingManagerImpl that created it can remove it.
             }
         }
-        LOGGER.debug("Saving {} {} {} {} ", new Object[] { keySpace, columnFamily, key,
+        LOGGER.debug("Saving {} {} {} {} ", new Object[] { cacheName, columnFamily, key,
                 encodedProperties });
-        client.insert(keySpace, columnFamily, key, encodedProperties, probablyNew);
+        client.insert(cacheName, cacheKey, encodedProperties, probablyNew);
         if ( sharedCache != null ) {
             // if we just added a value in, remove the key so that any stale state (including a previously deleted object is removed)
             sharedCache.remove(cacheKey);
