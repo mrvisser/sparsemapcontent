@@ -3,9 +3,13 @@
  */
 package org.sakaiproject.nakamura.lite.storage.infinispan;
 
+import org.apache.lucene.search.Filter;
+import org.hibernate.search.query.dsl.QueryBuilder;
 import org.infinispan.Cache;
 import org.infinispan.manager.CacheContainer;
+import org.infinispan.query.SearchManager;
 import org.sakaiproject.nakamura.api.lite.IndexDocument;
+import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
@@ -22,13 +26,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 /**
  * @author Branden
- * 
  */
 public class InfinispanStorageClient implements StorageClient {
 
@@ -37,11 +41,11 @@ public class InfinispanStorageClient implements StorageClient {
 
 	private final CacheContainer storageContainer;
 	private final String indexCacheName;
-	private final Map<String, IndexDocument> cacheIndexes;
+	private final Map<String, List<IndexDocumentFactory>> cacheIndexes;
 	private StorageClientListener storageClientListener;
 
 	public InfinispanStorageClient(CacheContainer storageContainer, String indexCacheName,
-	    Map<String, IndexDocument> cacheIndexes) {
+	    Map<String, List<IndexDocumentFactory>> cacheIndexes) {
 		this.storageContainer = storageContainer;
 		this.indexCacheName = indexCacheName;
 		this.cacheIndexes = cacheIndexes;
@@ -65,6 +69,8 @@ public class InfinispanStorageClient implements StorageClient {
 				mutableValues.put(columnName, entry.getValue());
 			}
 		}
+		
+		index(cacheName, key, mutableValues);
 
 		if (storageClientListener != null) {
 			storageClientListener.before(cacheName, key, before);
@@ -82,14 +88,32 @@ public class InfinispanStorageClient implements StorageClient {
 			throws StorageClientException {
 		Map<String, Object> values = get(cacheName, key);
 		if (values != null) {
+		  List<IndexDocument> documents = getIndexedDocuments(cacheName, key, values);
+		  removeIndex(documents);
 			getCache(cacheName).remove(key);
 		}
 	}
 
-	public DisposableIterator<Map<String, Object>> find(Map<String, Object> properties,
-	    DirectCacheAccess cachingManager) throws StorageClientException {
-	  // TODO: implement searching the index.
-		return null;
+	public DisposableIterator<Map<String, Object>> find(Class<? extends IndexDocument> clazz,
+	    Map<String, Object> properties, DirectCacheAccess cachingManager)
+	    throws StorageClientException {
+	  SearchManager searchManager = org.infinispan.query.Search.getSearchManager(
+	      getCache(indexCacheName));
+	  QueryBuilder queryBuilder = searchManager.buildQueryBuilderForClass(clazz).get();
+	  for (Map.Entry<String, Object> entry : properties.entrySet()) {
+	    String k = entry.getKey();
+	    Object v = entry.getValue();
+	    if (v != null) {
+  	    if (v instanceof Map) {
+  	      for (Map.Entry<String, Object> subEntry : ((Map<String, Object>)v).entrySet()) {
+  	        String subk = subEntry.getKey();
+  	        Object subv = subEntry.getValue();
+  	        
+  	      }
+  	    }
+	    }
+	  }
+	  return null;
 	}
 
 	public void close() {
@@ -129,8 +153,7 @@ public class InfinispanStorageClient implements StorageClient {
 		this.storageClientListener = storageClientListener;
 	}
 	
-	public void index(List<IndexDocument> documents)
-	    throws StorageClientException {
+	public void updateIndex(List<IndexDocument> documents) throws StorageClientException {
 	  Cache<Object, Object> cache = getCache(indexCacheName);
 	  if (documents != null) {
 	    for (IndexDocument document : documents) {
@@ -139,9 +162,32 @@ public class InfinispanStorageClient implements StorageClient {
 	  }
 	}
 	
-	private void index(String sourceCacheName, Map<String, Object> content)
+	public void removeIndex(List<IndexDocument> documents) throws StorageClientException {
+	  Cache<Object, Object> cache = getCache(indexCacheName);
+	  if (documents != null) {
+	    for (IndexDocument document : documents) {
+	      cache.remove(document.getId());
+	    }
+	  }
+	}
+	
+	private void index(String sourceCacheName, String key, Map<String, Object> content)
 	    throws StorageClientException {
-	  List<IndexDocument> candidateDocuments = cacheIndexes.get(sourceCacheName);
+	  updateIndex(getIndexedDocuments(sourceCacheName, key, content));
+	}
+	
+	private List<IndexDocument> getIndexedDocuments(String sourceCacheName, String key,
+	    Map<String, Object> content) {
+	  List<IndexDocument> toIndex = new LinkedList<IndexDocument>();
+	  List<IndexDocumentFactory> factories = cacheIndexes.get(sourceCacheName);
+    for (IndexDocumentFactory factory : factories) {
+      IndexDocument doc = factory.createIndexDocument(key, content);
+      if (doc != null) {
+        doc.setId(key);
+        toIndex.add(doc);
+      }
+    }
+    return toIndex;
 	}
 	
 	@SuppressWarnings("unchecked")

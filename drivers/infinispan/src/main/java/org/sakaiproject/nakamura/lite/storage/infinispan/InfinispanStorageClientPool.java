@@ -12,11 +12,13 @@ import org.infinispan.manager.CacheContainer;
 import org.infinispan.manager.DefaultCacheManager;
 import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.IndexDocument;
+import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.StorageCacheManager;
 import org.sakaiproject.nakamura.lite.storage.spi.AbstractClientConnectionPool;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -31,7 +33,8 @@ public class InfinispanStorageClientPool extends AbstractClientConnectionPool {
 	private final CacheContainer cacheContainer;
 	private final PoolableObjectFactory factory = new ClientConnectionPoolFactory();
 	
-	protected Map<String, IndexDocument> cacheIndexes = new HashMap<String, IndexDocument>();
+	protected Map<String, List<IndexDocumentFactory>> cacheIndexes = 
+	    new HashMap<String, List<IndexDocumentFactory>>();
 	
 	@Reference
 	protected Configuration configuration;

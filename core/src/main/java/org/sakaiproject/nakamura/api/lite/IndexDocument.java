@@ -18,40 +18,20 @@
 package org.sakaiproject.nakamura.api.lite;
 
 import java.io.Serializable;
-import java.util.Map;
 
 /**
  *
  */
-public interface IndexDocument extends Serializable {
-
-  /**
-   * A key that should be unique for type of index document.
-   * 
-   * @return
-   */
-  String getKey();
+public class IndexDocument implements Serializable {
+  private static final long serialVersionUID = -3564647507423596468L;
   
-  /**
-   * Consume the given content, filling out concrete document fields.
-   * 
-   * @param key
-   * @param properties
-   */
-  void consume(String key, Map<String, Object> properties);
+  private String id;
   
-  /**
-   * Whether or not this consumed document should be indexed.
-   * 
-   * @return
-   */
-  boolean shouldIndex();
+  public final String getId() {
+    return this.id;
+  }
   
-  /**
-   * Return a map that maps content properties to bean fields on this index document.
-   * 
-   * @return
-   */
-  Map<String, String> keyFieldMap();
-  
+  public final void setId(String id) {
+    this.id = id;
+  }
 }

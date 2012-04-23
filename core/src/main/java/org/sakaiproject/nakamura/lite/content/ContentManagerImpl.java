@@ -171,8 +171,6 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 
     private GridFilesystem fs;
     
-    private String[] indexColumnNames;
-    
     /**
      * Storage Client
      */

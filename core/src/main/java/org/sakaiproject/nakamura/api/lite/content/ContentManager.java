@@ -17,6 +17,7 @@
  */
 package org.sakaiproject.nakamura.api.lite.content;
 
+import org.apache.lucene.search.Query;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalTokenResolver;
@@ -57,7 +58,7 @@ public interface ContentManager {
      * @throws AccessDeniedException
      */
     // TODO needs better documentation - not clear how to OR or AND
-    Iterable<Content> find(Map<String, Object> searchProperties) throws StorageClientException, AccessDeniedException;
+    Iterable<Content> find(Query luceneQuery) throws StorageClientException, AccessDeniedException;
 
     /**
      * Counts the maximum number of results a find operation could return, ignoring access control. This method may cause problems

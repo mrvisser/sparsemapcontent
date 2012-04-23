@@ -92,8 +92,9 @@ public interface StorageClient {
      * @return an iterator of results
      * @throws StorageClientException
      */
-    DisposableIterator<Map<String, Object>> find(Map<String, Object> properties,
-        DirectCacheAccess cachingManager) throws StorageClientException;
+    DisposableIterator<Map<String, Object>> find(String keySpace, String authorizableColumnFamily,
+        Map<String, Object> properties, DirectCacheAccess cachingManager)
+        throws StorageClientException;
 
     /**
      * Close this client.
@@ -126,8 +127,15 @@ public interface StorageClient {
      * @param documents
      * @throws StorageClientException
      */
-    void index(String sourceCacheName, List<IndexDocument> documents)
-        throws StorageClientException;
+    void updateIndex(List<IndexDocument> documents) throws StorageClientException;
+    
+    /**
+     * Remove the given documents from the index.
+     * 
+     * @param documents
+     * @throws StorageClientException
+     */
+    void removeIndex(List<IndexDocument> documents) throws StorageClientException;
     
     void setStorageClientListener(StorageClientListener storageClientListener);
 
