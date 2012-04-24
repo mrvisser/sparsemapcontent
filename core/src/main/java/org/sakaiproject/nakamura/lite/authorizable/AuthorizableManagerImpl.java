@@ -642,7 +642,7 @@ public class AuthorizableManagerImpl extends CachingManagerImpl implements Autho
     
     public void triggerRefreshAll() throws StorageClientException {
         if (User.ADMIN_USER.equals(accessControlManager.getCurrentUserId()) ) {
-            DisposableIterator<SparseRow> all = client.listAll(authCach, authorizableColumnFamily);
+            DisposableIterator<SparseRow> all = client.listAll(authCacheName);
             try {
                 while(all.hasNext()) {
                     Map<String, Object> c = all.next().getProperties();

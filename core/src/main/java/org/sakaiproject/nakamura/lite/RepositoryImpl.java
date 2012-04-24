@@ -86,46 +86,49 @@ public class RepositoryImpl implements Repository {
     public RepositoryImpl() {
     }
 
-    public RepositoryImpl(Configuration configuration, StorageClientPool clientPool,
-            LoggingStorageListener listener) {
+    public RepositoryImpl(CacheContainer cacheContainer, Configuration configuration,
+        LoggingStorageListener listener) throws StorageClientException, AccessDeniedException {
       this.configuration = configuration;
-      this.clientPool = clientPool;
       this.storeListener = listener;
+      this.cacheContainer = cacheContainer;
+      doStandardActivation();
     }
 
     @Activate
     public void activate(Map<String, Object> properties) throws ClientPoolException,
             StorageClientException, AccessDeniedException {
-        StorageClient client = null;
-        try {
           // set up the caches
           cacheContainer = new DefaultCacheManager(true);
           //TODO: configure the cache container
-          
-          clientPool = new InfinispanStorageClientPool(cacheContainer, configuration, indexes);
-          client = clientPool.getClient();
-            
-          // setup the authorizables
-          AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
-              configuration);
-          authorizableActivator.setup();
-          
-          // set up the content store
-          Cache<String, byte[]> contentBodyCache = cacheContainer.getCache(
-              configuration.getContentBodyCacheName());
-          Cache<String, Metadata> contentMetadataCache = cacheContainer.getCache(
-              configuration.getContentMetadataName());
-          fs = new GridFilesystem(contentBodyCache, contentMetadataCache);
-            
-        } finally {
-            if (client != null) {
-                client.close();
-            } else {
-                LOGGER.error("Failed to actvate repository, probably failed to create default users");
-            }
-        }
+          doStandardActivation();
     }
 
+    private void doStandardActivation() throws StorageClientException, AccessDeniedException {
+      StorageClient client = null;
+      try {
+        clientPool = new InfinispanStorageClientPool(cacheContainer, configuration, indexes);
+        client = clientPool.getClient();
+          
+        // setup the authorizables
+        AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
+            configuration);
+        authorizableActivator.setup();
+        
+        // set up the content store
+        Cache<String, byte[]> contentBodyCache = cacheContainer.getCache(
+            configuration.getContentBodyCacheName());
+        Cache<String, Metadata> contentMetadataCache = cacheContainer.getCache(
+            configuration.getContentMetadataName());
+        fs = new GridFilesystem(contentBodyCache, contentMetadataCache);
+      } finally {
+        if (client != null) {
+          client.close();
+        } else {
+          LOGGER.error("Failed to actvate repository, probably failed to create default users");
+        }
+      }
+    }
+    
     @Deactivate
     public void deactivate(Map<String, Object> properties) throws ClientPoolException {
       if (cacheContainer != null)

@@ -19,7 +19,6 @@
 	</properties>
 	<modules>
 		<module>core</module>
-		<module>drivers/jdbc</module>
 	</modules>
 	<scm>
 		<connection>scm:git:git://github.com/sakaiproject/sparsemapcontent.git</connection>

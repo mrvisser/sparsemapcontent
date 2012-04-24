@@ -34,9 +34,6 @@ public  abstract class BaseColumnFamilyCacheManager implements ColumnFamilyCache
         if ( configuration.getAuthorizableColumnFamily().equals(columnFamily)) {
             return storageCacheManager.getAuthorizableCache();
         }
-        if ( configuration.getContentColumnFamily().equals(columnFamily)) {
-            return storageCacheManager.getContentCache();
-        }
         return null;
     }
 

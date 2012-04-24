@@ -17,8 +17,6 @@
  */
 package org.sakaiproject.nakamura.lite.storage.spi;
 
-import com.google.common.collect.ImmutableSet;
-
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.felix.scr.annotations.Activate;
@@ -35,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Set;
 
 @Component(componentAbstract = true)
 public abstract class AbstractClientConnectionPool implements StorageClientPool {
@@ -84,14 +81,7 @@ public abstract class AbstractClientConnectionPool implements StorageClientPool 
     @Reference
     private Configuration configuration;
 
-    private Set<String> indexColumns;
-
-
-
     private GenericObjectPool pool;
-
-    private Set<String> indexColumnsTypes;
-
 
     public AbstractClientConnectionPool() {
     }
@@ -102,8 +92,6 @@ public abstract class AbstractClientConnectionPool implements StorageClientPool 
         if ( configuration == null ) {
             configuration = (Configuration) properties.get(Configuration.class.getName());
         }
-        indexColumns = ImmutableSet.copyOf(configuration.getIndexColumnNames());
-        indexColumnsTypes = ImmutableSet.copyOf(configuration.getIndexColumnTypes());
         int maxActive = StorageClientUtils.getSetting(properties.get(MAX_ACTIVE), 200);
         byte whenExhaustedAction = GenericObjectPool.DEFAULT_WHEN_EXHAUSTED_ACTION;
         String whenExhausted = (String) properties.get(WHEN_EHAUSTED);
@@ -152,15 +140,6 @@ public abstract class AbstractClientConnectionPool implements StorageClientPool 
             LOGGER.error("Failed to close pool ", e);
         }
     }
-
-    public Set<String> getIndexColumns() {
-        return indexColumns;
-    }
-
-    public Set<String> getIndexColumnsTypes() {
-        return indexColumnsTypes;
-    }
-
 
     /*
      * (non-Javadoc)

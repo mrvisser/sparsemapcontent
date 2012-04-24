@@ -17,51 +17,58 @@
  */
 package org.sakaiproject.nakamura.lite;
 
-import java.io.IOException;
-import java.util.Map;
-
+import com.google.common.collect.ImmutableMap;
 
 import org.junit.Assert;
 import org.junit.Test;
 import org.sakaiproject.nakamura.lite.content.InternalContentAccess;
 
-import com.google.common.collect.ImmutableMap;
+import java.io.IOException;
+import java.util.Map;
 
 public class ConfigurationImplTest {
     @Test
     public void testProperties() throws IOException {
         InternalContentAccess.resetInternalContent();
         ConfigurationImpl configurationImpl = new ConfigurationImpl();
-        Map<String,Object> properties = ImmutableMap.of(ConfigurationImpl.INDEX_COLUMN_NAMES, (Object)ConfigurationImpl.DEFAULT_INDEX_COLUMN_NAMES);
+        Map<String,Object> properties = ImmutableMap.of();
         configurationImpl.activate(properties);
-        Assert.assertEquals("n",configurationImpl.getKeySpace());
+        Assert.assertEquals("ac",configurationImpl.getAclColumnFamily());
+        Assert.assertEquals("au",configurationImpl.getAuthorizableColumnFamily());
     }
     @Test
     public void testPropertiesOSGiOverride() throws IOException {
         InternalContentAccess.resetInternalContent();
         ConfigurationImpl configurationImpl = new ConfigurationImpl();
-        Map<String,Object> properties = ImmutableMap.of(ConfigurationImpl.INDEX_COLUMN_NAMES,(Object)"somethingElse");
+        Map<String,Object> properties = ImmutableMap.of(ConfigurationImpl.ACL_COLUMN_FAMILY,
+            (Object)"somethingElse", ConfigurationImpl.AUTHORIZABLE_COLUMN_FAMILY,
+            (Object) "somethingElse");
         configurationImpl.activate(properties);
-        Assert.assertArrayEquals(new String[]{"somethingElse"}, configurationImpl.getIndexColumnNames());
+        Assert.assertEquals("somethingElse", configurationImpl.getAclColumnFamily());
+        Assert.assertEquals("somethingElse", configurationImpl.getAuthorizableColumnFamily());
     }
     @Test
     public void testPropertiesSharedOverride() throws IOException {
         InternalContentAccess.resetInternalContent();
         ConfigurationImpl configurationImpl = new ConfigurationImpl();
         System.setProperty(ConfigurationImpl.SHAREDCONFIGPROPERTY, "src/test/resources/testsharedoverride.properties");
-        Map<String,Object> properties = ImmutableMap.of(ConfigurationImpl.INDEX_COLUMN_NAMES, (Object)ConfigurationImpl.DEFAULT_INDEX_COLUMN_NAMES);
+        Map<String,Object> properties = ImmutableMap.of();
         configurationImpl.activate(properties);
         System.clearProperty(ConfigurationImpl.SHAREDCONFIGPROPERTY);
-        Assert.assertArrayEquals(new String[]{"somethingElseFromProperties"}, configurationImpl.getIndexColumnNames());
+        Assert.assertEquals("somethingElseFromProperties", configurationImpl.getAclColumnFamily());
+        Assert.assertEquals("somethingElseFromProperties", configurationImpl.getAuthorizableColumnFamily());
     }
     @Test
     public void testPropertiesSharedOverrideOSGi() throws IOException {
         InternalContentAccess.resetInternalContent();
         ConfigurationImpl configurationImpl = new ConfigurationImpl();
         System.setProperty(ConfigurationImpl.SHAREDCONFIGPROPERTY, "src/test/resources/testsharedoverride.properties");
-        Map<String,Object> properties = ImmutableMap.of(ConfigurationImpl.INDEX_COLUMN_NAMES,(Object)"somethingElse");
+        Map<String,Object> properties = ImmutableMap.of(ConfigurationImpl.ACL_COLUMN_FAMILY,
+            (Object)"somethingElse", ConfigurationImpl.AUTHORIZABLE_COLUMN_FAMILY,
+            (Object) "somethingElse");
         configurationImpl.activate(properties);
         System.clearProperty(ConfigurationImpl.SHAREDCONFIGPROPERTY);
-        Assert.assertArrayEquals(new String[]{"somethingElse"}, configurationImpl.getIndexColumnNames());
+        Assert.assertEquals("somethingElse", configurationImpl.getAclColumnFamily());
+        Assert.assertEquals("somethingElse", configurationImpl.getAuthorizableColumnFamily());
     }
 }

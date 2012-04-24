@@ -894,7 +894,9 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         ObjectInputStream pin = null;
         try {
         	pin = new ObjectInputStream(fs.getInput(propertiesFile));
-        	return (Map<String, Object>) pin.readObject();
+        	@SuppressWarnings("unchecked")
+          Map<String, Object> result = (Map<String, Object>) pin.readObject();
+        	return result;
         } catch (IOException e) {
         	LOGGER.warn("Received exception trying to load file properties.", e);
         } catch (ClassNotFoundException e) {

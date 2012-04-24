@@ -43,40 +43,31 @@ public class ConfigurationImpl implements Configuration {
 
     @Property(value = "ac")
     protected static final String ACL_COLUMN_FAMILY = "acl-column-family";
-    @Property(value = "n")
-    protected static final String KEYSPACE = "keyspace";
     @Property(value = "au")
     protected static final String AUTHORIZABLE_COLUMN_FAMILY = "authorizable-column-family";
-    @Property(value = "cn")
-    protected static final String CONTENT_COLUMN_FAMILY = "content-column-family";
-    @Property(value = "lk")
-    protected static final String LOCK_COLUMN_FAMILY = "lock-column-family";
-    @Property(value = "idx")
-    protected static final String INDEX_COLUMN_FAMILY = "index-column-family";
+
+    protected static final String AUTH_CACHE_NAME = "AuthCache";
+    
+    protected static final String CONTENT_BODY_CACHE_NAME = "ContentBodyCache";
+
+    protected static final String CONTENT_METADATA_CACHE_NAME = "ContentMetadataCache";
+
+    protected static final String INDEX_CACHE_NAME = "IndexCache";
     
     private static final String SHAREDCONFIGPATH = "org/sakaiproject/nakamura/lite/shared.properties";
 
     protected static final String SHAREDCONFIGPROPERTY = "sparseconfig";
     private static final Logger LOGGER = LoggerFactory.getLogger(ConfigurationImpl.class);
-    
 
     private String aclColumnFamily;
-    private String keySpace;
     private String authorizableColumnFamily;
-    private String contentColumnFamily;
-    private String lockColumnFamily;
-    private String indexColumnFamily;
     private Map<String, String> sharedProperties;
 
-    @SuppressWarnings("unchecked")
     @Activate
     public void activate(Map<String, Object> properties) throws IOException {
         aclColumnFamily = StorageClientUtils.getSetting(properties.get(ACL_COLUMN_FAMILY), "ac");
-        keySpace = StorageClientUtils.getSetting(properties.get(KEYSPACE), "n");
         authorizableColumnFamily = StorageClientUtils.getSetting(properties.get(AUTHORIZABLE_COLUMN_FAMILY), "au");
-        contentColumnFamily = StorageClientUtils.getSetting(properties.get(CONTENT_COLUMN_FAMILY), "cn");
-        lockColumnFamily = StorageClientUtils.getSetting(properties.get(LOCK_COLUMN_FAMILY), "ln");
-
+        
         // load defaults
         // check the classpath
         sharedProperties = Maps.newHashMap();
@@ -111,28 +102,28 @@ public class ConfigurationImpl implements Configuration {
         return aclColumnFamily;
     }
 
-    public String getKeySpace() {
-        return keySpace;
-    }
-
     public String getAuthorizableColumnFamily() {
         return authorizableColumnFamily;
     }
 
-    public String getContentColumnFamily() {
-        return contentColumnFamily;
-    }
-    
-    public String getLockColumnFamily() {
-        return lockColumnFamily;
-    }
-    
     public Map<String, String> getSharedConfig() {
         return sharedProperties;
     }
 
-    public String getIndexColumnFamily() {
-      return indexColumnFamily;
+    public String getAuthCacheName() {
+      return AUTH_CACHE_NAME;
+    }
+
+    public String getContentBodyCacheName() {
+      return CONTENT_BODY_CACHE_NAME;
+    }
+
+    public String getContentMetadataName() {
+      return CONTENT_METADATA_CACHE_NAME;
+    }
+
+    public String getIndexCacheName() {
+      return INDEX_CACHE_NAME;
     }
 
 }
