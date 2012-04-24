@@ -54,6 +54,8 @@ public class ConfigurationImpl implements Configuration {
 
     protected static final String INDEX_CACHE_NAME = "IndexCache";
     
+    protected static final String INDEX_DIRECTORY_CACHE_NAME = "IndexCacheDirectory";
+    
     private static final String SHAREDCONFIGPATH = "org/sakaiproject/nakamura/lite/shared.properties";
 
     protected static final String SHAREDCONFIGPROPERTY = "sparseconfig";
@@ -126,4 +128,7 @@ public class ConfigurationImpl implements Configuration {
       return INDEX_CACHE_NAME;
     }
 
+    public String getIndexStorageCacheName() {
+      return INDEX_DIRECTORY_CACHE_NAME;
+    }
 }

@@ -38,7 +38,7 @@ public class AuthorizableIndexDocument implements IndexDocument {
   public String type;
 
   @Field
-  public String principleName;
+  public String principalName;
   
   public String getId() {
     return id;

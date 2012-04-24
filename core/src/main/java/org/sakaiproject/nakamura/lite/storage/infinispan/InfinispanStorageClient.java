@@ -13,7 +13,6 @@ import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
-import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
 import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.lite.storage.spi.DisposableIterator;
 import org.sakaiproject.nakamura.lite.storage.spi.Disposer;
@@ -74,7 +73,7 @@ public class InfinispanStorageClient implements StorageClient {
 			}
 		}
 		
-		index(nsKey, mutableValues);
+		index(key, mutableValues);
 
 		if (storageClientListener != null) {
 			storageClientListener.before(cacheName, key, before);
@@ -93,7 +92,7 @@ public class InfinispanStorageClient implements StorageClient {
 	  String nsKey = getNamespacedKey(columnFamily, key);
 		Map<String, Object> values = get(cacheName, columnFamily, key);
 		if (values != null) {
-		  List<IndexDocument> documents = getIndexedDocuments(nsKey, values);
+		  List<IndexDocument> documents = getIndexedDocuments(key, values);
 		  removeIndex(documents);
 			getCache(cacheName).remove(nsKey);
 		}
@@ -203,4 +202,11 @@ public class InfinispanStorageClient implements StorageClient {
 		return cache;
 	}
 	
+	public void addIndexDocumentFactory(IndexDocumentFactory factory) {
+	  this.indexes.add(factory);
+	}
+	
+	public void removeIndexDocumentFactory(IndexDocumentFactory factory) {
+	  this.indexes.remove(factory);
+	}
 }

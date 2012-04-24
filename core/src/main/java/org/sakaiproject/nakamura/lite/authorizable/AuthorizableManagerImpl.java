@@ -506,15 +506,15 @@ public class AuthorizableManagerImpl extends CachingManagerImpl implements Autho
             type = Authorizable.GROUP_VALUE;
         }
         
-        if (type == null)
-          throw new IllegalArgumentException("Authorizable type must be either group or user.");
+        BooleanQuery query = new BooleanQuery();
+        
+        if (type != null) {
+          Query typeQuery = new TermQuery(new Term("type", type));
+          query.add(typeQuery, Occur.MUST);
+        }
         
         Query propQuery = new TermQuery(new Term(termName, value));
-        Query typeQuery = new TermQuery(new Term("type", type));
-        
-        BooleanQuery query = new BooleanQuery();
         query.add(propQuery, Occur.MUST);
-        query.add(typeQuery, Occur.MUST);
         
         final QueryIterator docs = client.find(query);
         

@@ -23,12 +23,15 @@ import com.google.common.collect.Maps;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.manager.DefaultCacheManager;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
+import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
+import org.sakaiproject.nakamura.lite.authorizable.AuthorizableIndexDocumentFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 
 /**
@@ -58,10 +61,11 @@ public class BaseMemoryRepository {
         cacheContainer.defineConfiguration(configuration.getAuthCacheName(),
             createInMemoryCache());
         cacheContainer.defineConfiguration(configuration.getIndexCacheName(),
-            createInMemoryCache());
+            createInMemoryIndexedCache());
         
         repository = new RepositoryImpl(cacheContainer, configuration,
-            new LoggingStorageListener());
+            new LoggingStorageListener(), Arrays.asList((IndexDocumentFactory)
+                new AuthorizableIndexDocumentFactory()));
     }
 
     public void close() {
@@ -78,5 +82,10 @@ public class BaseMemoryRepository {
 
     private org.infinispan.configuration.cache.Configuration createInMemoryCache() {
       return (new ConfigurationBuilder()).build();
+    }
+    
+    private org.infinispan.configuration.cache.Configuration createInMemoryIndexedCache() {
+      return (new ConfigurationBuilder()).indexing().enable().indexLocalOnly(true)
+          .addProperty("hibernate.search.default.directory_provider", "ram").build();
     }
 }

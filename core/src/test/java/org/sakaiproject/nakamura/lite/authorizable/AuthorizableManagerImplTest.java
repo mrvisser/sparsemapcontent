@@ -19,7 +19,6 @@ package org.sakaiproject.nakamura.lite.authorizable;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -27,7 +26,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
-import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.Session;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
@@ -39,15 +37,12 @@ import org.sakaiproject.nakamura.api.lite.authorizable.Authorizable;
 import org.sakaiproject.nakamura.api.lite.authorizable.Group;
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
-import org.sakaiproject.nakamura.lite.ConfigurationImpl;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
 import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AccessControlManagerImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.PrincipalValidatorResolverImpl;
 import org.sakaiproject.nakamura.lite.storage.spi.ConcurrentLRUMap;
-import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
-import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,20 +53,19 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public abstract class AbstractAuthorizableManagerImplTest {
+public class AuthorizableManagerImplTest {
 
     private static final Logger LOGGER = LoggerFactory
-            .getLogger(AbstractAuthorizableManagerImplTest.class);
+            .getLogger(AuthorizableManagerImplTest.class);
     private Map<String, CacheHolder> sharedCache = new ConcurrentLRUMap<String, CacheHolder>(1000);
     private PrincipalValidatorResolver principalValidatorResolver = new PrincipalValidatorResolverImpl();
     private RepositoryImpl repository;
     
-    protected abstract StorageClientPool getClientPool(Configuration configuration2) throws ClassNotFoundException;
-
     @Before
     public void before() throws ClientPoolException, StorageClientException, AccessDeniedException,
         ClassNotFoundException, IOException {
-      RepositoryImpl repository = (new BaseMemoryRepository()).getRepository();
+      repository = (new BaseMemoryRepository()).getRepository();
+      repository.bindIndexDocumentFactory(new AuthorizableIndexDocumentFactory());
     }
     
     @After
@@ -83,18 +77,19 @@ public abstract class AbstractAuthorizableManagerImplTest {
 
     @Test
     public void testAuthorizableManager() throws StorageClientException, AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
         Assert.assertNotNull(currentUser);
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(
+            repository.getConnectionPool().getClient(), currentUser, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+                null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+                accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         Assert.assertNotNull(authorizableManager.findAuthorizable(User.ADMIN_USER));
         Assert.assertNotNull(authorizableManager.findAuthorizable(User.ANON_USER));
@@ -104,7 +99,8 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerAccessDenied() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "wrong-password");
 
         Assert.assertNull(currentUser);
@@ -113,7 +109,8 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerUserNotFound() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("nonuser", "wrong-password");
 
         Assert.assertNull(currentUser);
@@ -122,16 +119,17 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerCheckUser() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(
+            repository.getConnectionPool().getClient(), currentUser, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+            accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         Authorizable a = authorizableManager.findAuthorizable(User.ADMIN_USER);
         Authorizable an = authorizableManager.findAuthorizable(User.ANON_USER);
@@ -158,16 +156,17 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerCreateUser() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(
+            repository.getConnectionPool().getClient(), currentUser, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+            accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         authorizableManager.delete("testuser");
 
@@ -194,16 +193,17 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerCreateUserDenied() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(
+            repository.getConnectionPool().getClient(), currentUser, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+            accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         authorizableManager.delete("testuser2");
 
@@ -225,11 +225,11 @@ public abstract class AbstractAuthorizableManagerImplTest {
         Assert.assertFalse(user.isAdmin());
 
         AccessControlManagerImpl userAccessControlManagerImpl = new AccessControlManagerImpl(
-                client, user, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+            repository.getConnectionPool().getClient(), user, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
         AuthorizableManagerImpl userAuthorizableManager = new AuthorizableManagerImpl(user, null,
-                client, configuration, userAccessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            repository.getConnectionPool().getClient(), repository.getConfiguration(),
+            userAccessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         try {
             userAuthorizableManager.createUser("testuser3", "Test User", "test", ImmutableMap.of(
@@ -255,16 +255,17 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerCreateGroup() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(
+            repository.getConnectionPool().getClient(), currentUser, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+            accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         authorizableManager.delete("user2");
         authorizableManager.delete("user3");
@@ -352,16 +353,18 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testFindAuthorizable() throws StorageClientException, AccessDeniedException {
         try {
-            AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+            AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository
+                .getConnectionPool().getClient(), repository.getConfiguration(), null);
             User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
             AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(
-                    client, currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                    principalValidatorResolver);
+                repository.getConnectionPool().getClient(), currentUser, repository
+                .getConfiguration(), sharedCache, new LoggingStorageListener(),
+                principalValidatorResolver);
 
             AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                    null, client, configuration, accessControlManagerImpl, sharedCache,
-                    new LoggingStorageListener());
+                null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+                accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
             for (int i = 0; i < 10; i++) {
                 authorizableManager.delete("testfinduser" + i);
@@ -425,16 +428,17 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerNullProperties() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(
+            repository.getConnectionPool().getClient(), currentUser, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+            accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         authorizableManager.delete("testuser");
 
@@ -453,16 +457,17 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerTrigger() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(repository
+            .getConnectionPool().getClient(), currentUser, repository.getConfiguration(),
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            null, repository.getConnectionPool().getClient(), repository.getConfiguration(),
+            accessControlManagerImpl, sharedCache, new LoggingStorageListener());
 
         authorizableManager.delete("testuser");
 
@@ -481,16 +486,17 @@ public abstract class AbstractAuthorizableManagerImplTest {
     @Test
     public void testAuthorizableManagerTriggerAll() throws StorageClientException,
             AccessDeniedException {
-        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(repository.getConnectionPool()
+            .getClient(), repository.getConfiguration(), null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
 
-        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
-                currentUser, configuration, sharedCache, new LoggingStorageListener(),
-                principalValidatorResolver);
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(repository
+            .getConnectionPool().getClient(), currentUser, repository.getConfiguration(), 
+            sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
         AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser,
-                null, client, configuration, accessControlManagerImpl, sharedCache,
-                new LoggingStorageListener());
+            null, repository.getConnectionPool().getClient(), repository.getConfiguration(), accessControlManagerImpl, sharedCache,
+            new LoggingStorageListener());
 
         authorizableManager.delete("testuser");
 

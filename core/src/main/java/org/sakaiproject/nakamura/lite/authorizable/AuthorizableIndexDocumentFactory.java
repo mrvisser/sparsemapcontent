@@ -35,7 +35,7 @@ import java.util.Map;
 public class AuthorizableIndexDocumentFactory implements IndexDocumentFactory {
 
   private static final Map<String, String> PROPERTY_MAPPING = ImmutableMap.<String, String>of(
-      "rep:principleName", "principalName");
+      "rep:principalName", "principalName");
   
   /**
    * {@inheritDoc}
@@ -47,7 +47,7 @@ public class AuthorizableIndexDocumentFactory implements IndexDocumentFactory {
     AuthorizableIndexDocument doc = new AuthorizableIndexDocument();
     doc.id = key;
     doc.type = (String) properties.get(Authorizable.AUTHORIZABLE_TYPE_FIELD);
-    doc.principleName = (String) properties.get("rep:principleName");
+    doc.principalName = (String) properties.get("rep:principalName");
     return doc;
   }
 

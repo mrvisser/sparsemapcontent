@@ -55,9 +55,14 @@ public interface Configuration {
     String getContentMetadataName();
     
     /**
-     * @return name of the index storage cache.
+     * @return name of the index document cache.
      */
     String getIndexCacheName();
+    
+    /**
+     * @return the name of the index storage cache. This stores the actual lucene indexes.
+     */
+    String getIndexStorageCacheName();
     
    /**
      * @return the config, shared by all drivers.

@@ -43,12 +43,14 @@ import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorResolv
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
+import org.sakaiproject.nakamura.lite.storage.infinispan.InfinispanStorageClient;
 import org.sakaiproject.nakamura.lite.storage.infinispan.InfinispanStorageClientPool;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -88,10 +90,11 @@ public class RepositoryImpl implements Repository {
     }
 
     public RepositoryImpl(CacheContainer cacheContainer, Configuration configuration,
-        LoggingStorageListener listener) throws StorageClientException, AccessDeniedException {
+        LoggingStorageListener listener, List<IndexDocumentFactory> indexes) throws StorageClientException, AccessDeniedException {
       this.configuration = configuration;
       this.storeListener = listener;
       this.cacheContainer = cacheContainer;
+      this.indexes.addAll(indexes);
       doStandardActivation();
     }
 
@@ -100,7 +103,7 @@ public class RepositoryImpl implements Repository {
             StorageClientException, AccessDeniedException {
           // set up the caches
           cacheContainer = new DefaultCacheManager(true);
-          //TODO: configure the cache container
+          //TODO: configure the cache container -- probably by XML
           doStandardActivation();
     }
 
@@ -255,6 +258,14 @@ public class RepositoryImpl implements Repository {
         this.configuration = configuration;
     }
 
+    public Configuration getConfiguration() {
+      return this.configuration;
+    }
+    
+    public StorageClientPool getConnectionPool() {
+      return this.clientPool;
+    }
+    
     public void setConnectionPool(StorageClientPool connectionPool) {
         this.clientPool = connectionPool;
     }
@@ -264,12 +275,15 @@ public class RepositoryImpl implements Repository {
 
     }
     
-    protected void bindIndexDocumentFactory(IndexDocumentFactory factory) {
+    public void bindIndexDocumentFactory(IndexDocumentFactory factory) throws ClientPoolException {
       indexes.add(factory);
+      ((InfinispanStorageClient)clientPool.getClient()).addIndexDocumentFactory(factory);
     }
 
-    protected void unbindIndexDocumentFactory(IndexDocumentFactory factory) {
+    public void unbindIndexDocumentFactory(IndexDocumentFactory factory)
+        throws ClientPoolException {
       indexes.remove(factory);
+      ((InfinispanStorageClient)clientPool.getClient()).removeIndexDocumentFactory(factory);
     }
 
 }

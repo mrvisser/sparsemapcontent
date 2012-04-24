@@ -23,8 +23,6 @@ public class InfinispanStorageClientPool implements StorageClientPool {
 
 	private final StorageClient client;
 	
-	protected List<IndexDocumentFactory> indexes;
-	
 	public InfinispanStorageClientPool(CacheContainer cacheContainer, Configuration configuration,
 	    List<IndexDocumentFactory> indexes) {
 	  Cache<String, IndexDocument> indexCache = cacheContainer.getCache(
