@@ -536,7 +536,8 @@ public class AuthorizableManagerImpl extends CachingManagerImpl implements Autho
                             accessControlManager.check(Security.ZONE_AUTHORIZABLES,
                                 doc.getId(), Permissions.CAN_READ);
                             
-                            Map<String, Object> authMap = client.get(authCacheName, doc.getId());
+                            Map<String, Object> authMap = client.get(authCacheName,
+                                authorizableColumnFamily, doc.getId());
                             if (authMap != null) {
                               if (isAUser(authMap)) {
                                   authorizable = new UserInternal(authMap, session, false);

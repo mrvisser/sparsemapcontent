@@ -50,15 +50,20 @@ public class InfinispanStorageClient implements StorageClient {
 		this.indexes = indexes;
 	}
 
-	public Map<String, Object> get(String cacheName, String key) throws StorageClientException {
-		return getMapFromStorage(cacheName, key);
+	public Map<String, Object> get(String cacheName, String columnFamily, String key)
+	    throws StorageClientException {
+		return getMapFromStorage(cacheName, getNamespacedKey(columnFamily, key));
 	}
 
-	public void insert(String cacheName, String key,
+	public void insert(String cacheName, String columnFamily, String key,
 			Map<String, Object> values, boolean probablyNew)
 			throws StorageClientException {
-		Map<String, Object> before = get(cacheName, key);
-		Map<String, Object> mutableValues = new HashMap<String, Object>(before);
+	  String nsKey = getNamespacedKey(columnFamily, key);
+		Map<String, Object> before = get(cacheName, columnFamily, key);
+		Map<String, Object> mutableValues = new HashMap<String, Object>();
+		if (before != null) {
+		  mutableValues.putAll(before);
+		}
 
 		for (Map.Entry<String, Object> entry : values.entrySet()) {
 			String columnName = entry.getKey();
@@ -69,13 +74,13 @@ public class InfinispanStorageClient implements StorageClient {
 			}
 		}
 		
-		index(cacheName, key, mutableValues);
+		index(nsKey, mutableValues);
 
 		if (storageClientListener != null) {
 			storageClientListener.before(cacheName, key, before);
 		}
 		
-		getCache(cacheName).put(key, mutableValues);
+		getCache(cacheName).put(nsKey, mutableValues);
 
 		if (storageClientListener != null) {
 			storageClientListener.after(cacheName, key,
@@ -83,13 +88,14 @@ public class InfinispanStorageClient implements StorageClient {
 		}
 	}
 
-	public void remove(String cacheName, String key)
+	public void remove(String cacheName, String columnFamily, String key)
 			throws StorageClientException {
-		Map<String, Object> values = get(cacheName, key);
+	  String nsKey = getNamespacedKey(columnFamily, key);
+		Map<String, Object> values = get(cacheName, columnFamily, key);
 		if (values != null) {
-		  List<IndexDocument> documents = getIndexedDocuments(key, values);
+		  List<IndexDocument> documents = getIndexedDocuments(nsKey, values);
 		  removeIndex(documents);
-			getCache(cacheName).remove(key);
+			getCache(cacheName).remove(nsKey);
 		}
 	}
 
@@ -146,7 +152,9 @@ public class InfinispanStorageClient implements StorageClient {
 	public void updateIndex(List<IndexDocument> documents) throws StorageClientException {
 	  if (documents != null) {
 	    for (IndexDocument document : documents) {
-	      indexCache.put(StorageClientUtils.getInternalUuid(), document);
+	      String key = String.format("%s:%s", document.getClass().getCanonicalName(),
+	          document.getId());
+	      indexCache.put(key, document);
 	    }
 	  }
 	}
@@ -154,12 +162,14 @@ public class InfinispanStorageClient implements StorageClient {
 	public void removeIndex(List<IndexDocument> documents) throws StorageClientException {
 	  if (documents != null) {
 	    for (IndexDocument document : documents) {
-	      indexCache.remove(document.getId());
+	      String key = String.format("%s:%s", document.getClass().getCanonicalName(),
+            document.getId());
+	      indexCache.remove(key);
 	    }
 	  }
 	}
 	
-	private void index(String sourceCacheName, String key, Map<String, Object> content)
+	private void index(String key, Map<String, Object> content)
 	    throws StorageClientException {
 	  updateIndex(getIndexedDocuments(key, content));
 	}
@@ -174,6 +184,10 @@ public class InfinispanStorageClient implements StorageClient {
       }
     }
     return toIndex;
+	}
+	
+	private String getNamespacedKey(String columnFamily, String key) {
+	  return String.format("%s:%s", columnFamily, key);
 	}
 	
 	@SuppressWarnings("unchecked")

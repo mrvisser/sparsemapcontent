@@ -77,11 +77,12 @@ public class RepositoryImpl implements Repository {
     @Reference
     protected PrincipalValidatorResolver principalValidatorResolver;
 
+    @Reference
+    protected StorageClientPool clientPool;
+    
     protected CacheContainer cacheContainer;
     
     protected GridFilesystem fs;
-    
-    protected StorageClientPool clientPool;
     
     public RepositoryImpl() {
     }

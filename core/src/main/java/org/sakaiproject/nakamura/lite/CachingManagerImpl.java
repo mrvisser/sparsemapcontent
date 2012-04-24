@@ -80,7 +80,7 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
             }
         }
         if (m == null) {
-            m = client.get(cacheName, cacheKey);
+            m = client.get(cacheName, columnFamily, key);
             if (m != null) {
                 LOGGER.debug("Cache Miss, Found Map {} {}", cacheKey, m);
             }
@@ -174,7 +174,7 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
                 }); 
             }
         }
-        client.remove(cacheName, cacheKey);
+        client.remove(cacheName, columnFamily, key);
     }
 
     /**
@@ -216,7 +216,7 @@ public abstract class CachingManagerImpl implements DirectCacheAccess {
         }
         LOGGER.debug("Saving {} {} {} {} ", new Object[] { cacheName, columnFamily, key,
                 encodedProperties });
-        client.insert(cacheName, cacheKey, encodedProperties, probablyNew);
+        client.insert(cacheName, columnFamily, key, encodedProperties, probablyNew);
         if ( sharedCache != null ) {
             // if we just added a value in, remove the key so that any stale state (including a previously deleted object is removed)
             sharedCache.remove(cacheKey);

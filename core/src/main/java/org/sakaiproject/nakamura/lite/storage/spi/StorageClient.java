@@ -55,8 +55,8 @@ public interface StorageClient {
 	 * @return the key value pairs in the row key or null
 	 * @throws StorageClientException
 	 */
-    Map<String, Object> get(String cacheName, String key)
-            throws StorageClientException;
+    Map<String, Object> get(String cacheName, String columnFamily, String key)
+        throws StorageClientException;
 
     /**
      * Insert or update a row in the store.
@@ -67,8 +67,8 @@ public interface StorageClient {
      * @param probablyNew whether or not the row is probably new
      * @throws StorageClientException
      */
-    void insert(String cacheName, String key, Map<String, Object> values, boolean probablyNew)
-            throws StorageClientException;
+    void insert(String cacheName, String columnFamily, String key, Map<String, Object> values,
+        boolean probablyNew) throws StorageClientException;
 
     /**
      * Remove a row in the store.
@@ -77,7 +77,7 @@ public interface StorageClient {
      * @param key the key of the row
      * @throws StorageClientException
      */
-    void remove(String cacheName, String key) throws StorageClientException;
+    void remove(String cacheName, String columnFamily, String key) throws StorageClientException;
 
     /**
      * Search for indexed content.

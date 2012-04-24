@@ -38,6 +38,7 @@ import org.sakaiproject.nakamura.api.lite.accesscontrol.Security;
 import org.sakaiproject.nakamura.api.lite.authorizable.Authorizable;
 import org.sakaiproject.nakamura.api.lite.authorizable.Group;
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
+import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
 import org.sakaiproject.nakamura.lite.ConfigurationImpl;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
 import org.sakaiproject.nakamura.lite.RepositoryImpl;
@@ -61,35 +62,22 @@ public abstract class AbstractAuthorizableManagerImplTest {
 
     private static final Logger LOGGER = LoggerFactory
             .getLogger(AbstractAuthorizableManagerImplTest.class);
-    private StorageClient client;
-    private ConfigurationImpl configuration;
-    private StorageClientPool clientPool;
     private Map<String, CacheHolder> sharedCache = new ConcurrentLRUMap<String, CacheHolder>(1000);
     private PrincipalValidatorResolver principalValidatorResolver = new PrincipalValidatorResolverImpl();
-
-    @Before
-    public void before() throws StorageClientException, AccessDeniedException, ClientPoolException,
-            ClassNotFoundException, IOException {
-        configuration = new ConfigurationImpl();
-        Map<String, Object> properties = Maps.newHashMap();
-        properties.put("keyspace", "n");
-        properties.put("acl-column-family", "ac");
-        properties.put("authorizable-column-family", "au");
-        configuration.activate(properties);
-        clientPool = getClientPool(configuration);
-        client = clientPool.getClient();
-        AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
-                configuration);
-        authorizableActivator.setup();
-        LOGGER.info("Setup Complete");
-    }
-
+    private RepositoryImpl repository;
+    
     protected abstract StorageClientPool getClientPool(Configuration configuration2) throws ClassNotFoundException;
 
+    @Before
+    public void before() throws ClientPoolException, StorageClientException, AccessDeniedException,
+        ClassNotFoundException, IOException {
+      RepositoryImpl repository = (new BaseMemoryRepository()).getRepository();
+    }
+    
     @After
     public void after() throws ClientPoolException {
-        if (client != null) {
-            client.close();
+        if (repository != null) {
+            repository.deactivate(null);
         }
     }
 
@@ -519,13 +507,9 @@ public abstract class AbstractAuthorizableManagerImplTest {
     }
 
     @Test
-    public void testAuthorizablePermissions() throws ClientPoolException, StorageClientException, AccessDeniedException {
-        RepositoryImpl repository = new RepositoryImpl(configuration, clientPool, new LoggingStorageListener());
-        Map<String, Object> properties = ImmutableMap.of("t", (Object) "x");
-        repository.activate(properties);
-
+    public void testAuthorizablePermissions() throws ClientPoolException, StorageClientException,
+        AccessDeniedException, ClassNotFoundException, IOException {
         // create some users
-
         Session adminSession = repository.loginAdministrative();
         adminSession.getAuthorizableManager().createUser(
                 "testAuthorizablePermissions.user1",
