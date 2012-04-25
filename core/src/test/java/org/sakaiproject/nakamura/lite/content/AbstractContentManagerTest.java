@@ -17,16 +17,11 @@
  */
 package org.sakaiproject.nakamura.lite.content;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Sets;
 
+import org.infinispan.io.GridFilesystem;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -50,28 +45,34 @@ import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.api.lite.content.ContentManager;
 import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
-import org.sakaiproject.nakamura.lite.ConfigurationImpl;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AccessControlManagerImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.PrincipalValidatorResolverImpl;
-import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
 import org.sakaiproject.nakamura.lite.storage.spi.ConcurrentLRUMap;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterators;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
-public abstract class AbstractContentManagerTest {
+public class AbstractContentManagerTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractContentManagerTest.class);
+    private RepositoryImpl repository;
+    private GridFilesystem fs;
     private StorageClient client;
-    private ConfigurationImpl configuration;
+    private Configuration configuration;
     private StorageClientPool clientPool;
     private Map<String, CacheHolder> sharedCache = new ConcurrentLRUMap<String, CacheHolder>(1000);
     private PrincipalValidatorResolver principalValidatorResolver = new PrincipalValidatorResolverImpl();
@@ -79,23 +80,13 @@ public abstract class AbstractContentManagerTest {
     @Before
     public void before() throws StorageClientException, AccessDeniedException, ClientPoolException,
             ClassNotFoundException, IOException {
-
-        Map<String, Object> properties = Maps.newHashMap();
-        properties.put("keyspace", "n");
-        properties.put("acl-column-family", "ac");
-        properties.put("authorizable-column-family", "au");
-        properties.put("content-column-family", "cn");
-        configuration = new ConfigurationImpl();
-        configuration.activate(properties);
-        clientPool = getClientPool(configuration);
-        client = clientPool.getClient();
-        AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
-                configuration);
-        authorizableActivator.setup();
-        LOGGER.info("Setup Complete");
+      repository = (new BaseMemoryRepository()).getRepository();
+      fs = repository.getGridFilesystem();
+      configuration = repository.getConfiguration();
+      clientPool = repository.getConnectionPool();
+      client = clientPool.getClient();
+      LOGGER.info("Setup Complete");
     }
-
-    protected abstract StorageClientPool getClientPool(Configuration configuration) throws ClassNotFoundException;
 
     @After
     public void after() throws ClientPoolException {
@@ -110,12 +101,12 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration, null,  new LoggingStorageListener());
         contentManager.update(new Content("/testCreateContent", ImmutableMap.of("prop1", (Object) "value1")));
         contentManager.update(new Content("/testCreateContent/test", ImmutableMap.of("prop1", (Object) "value2")));
-        contentManager
-                .update(new Content("/testCreateContent/test/ing", ImmutableMap.of("prop1", (Object) "value3")));
+        contentManager.update(new Content("/testCreateContent/test/ing",
+            ImmutableMap.of("prop1", (Object) "value3")));
 
         Content content = contentManager.get("/testCreateContent");
         Assert.assertEquals("/testCreateContent", content.getPath());
@@ -147,7 +138,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration, null,  new LoggingStorageListener());
         contentManager.update(new Content("newRootTestCreateContent", ImmutableMap.of("prop1", (Object) "value1")));
         contentManager.update(new Content("newRootTestCreateContent/test", ImmutableMap.of("prop1", (Object) "value2")));
@@ -184,7 +175,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration, null, new LoggingStorageListener());
         contentManager.update(new Content("testConentTree/1/11/111", ImmutableMap.of("prop111",
                 (Object) "value111")));
@@ -252,7 +243,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration, null, new LoggingStorageListener());
         contentManager.update(new Content("testCopySimple/source/thefile", ImmutableMap.of("prop",
                 (Object) "source")));
@@ -309,7 +300,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration, null, new LoggingStorageListener());
         contentManager.update(new Content("testCopyOverwrite/source/thefile", ImmutableMap.of("prop",
                 (Object) "source")));
@@ -368,7 +359,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration,  sharedCache, new LoggingStorageListener());
         String path = "/testSimpleDelete/test2/test3/test4";
         String parentPath = "/testSimpleDelete/test2/test3";
@@ -396,7 +387,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration,  sharedCache, new LoggingStorageListener());
         String path = "testSimpleDeleteRoot/test2/test3/test4";
         String parentPath = "testSimpleDeleteRoot/test2/test3";
@@ -424,7 +415,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration,  sharedCache, new LoggingStorageListener());
         contentManager.update(new Content("/testDeleteContent", ImmutableMap.of("prop1", (Object) "value1")));
         contentManager.update(new Content("/testDeleteContent/test", ImmutableMap.of("prop1", (Object) "value2")));
@@ -480,7 +471,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration,  sharedCache, new LoggingStorageListener());
         contentManager.update(new Content("/testDeleteContent", ImmutableMap.of("prop1", (Object) "value1")));
         contentManager.update(new Content("/testDeleteContent/test", ImmutableMap.of("prop1", (Object) "value2")));
@@ -517,7 +508,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration,  sharedCache, new LoggingStorageListener());
         StorageClientUtils.deleteTree(contentManager, "/testUpdateContent");
         contentManager.update(new Content("/testUpdateContent", ImmutableMap.of("prop1", (Object) "value1")));
@@ -565,7 +556,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration,  sharedCache, new LoggingStorageListener());
         StorageClientUtils.deleteTree(contentManager, "/testVersionContent");
         contentManager.update(new Content("/testVersionContent", ImmutableMap.of("prop1", (Object) "value1")));
@@ -644,7 +635,7 @@ public abstract class AbstractContentManagerTest {
         AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
                 currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration,  sharedCache, new LoggingStorageListener());
         StorageClientUtils.deleteTree(contentManager, "/testUploadContent");
         contentManager.update(new Content("/testUploadContent", ImmutableMap.of("prop1", (Object) "value1")));
@@ -758,7 +749,7 @@ public abstract class AbstractContentManagerTest {
     AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
         currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
 
-    ContentManagerImpl contentManager = new ContentManagerImpl(client,
+    ContentManagerImpl contentManager = new ContentManagerImpl(fs, client,
         accessControlManager, configuration, null, new LoggingStorageListener());
     contentManager.update(new Content("/testMoveWithChildren", ImmutableMap.of("prop1", (Object) "value1")));
     contentManager.update(new Content("/testMoveWithChildren/movewc", ImmutableMap.of("prop1",
@@ -807,7 +798,7 @@ public abstract class AbstractContentManagerTest {
     AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
         currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
 
-    ContentManagerImpl contentManager = new ContentManagerImpl(client,
+    ContentManagerImpl contentManager = new ContentManagerImpl(fs, client,
         accessControlManager, configuration, null, new LoggingStorageListener());
     contentManager.update(new Content("/testMove", ImmutableMap.<String, Object>of("prop1", "value1")));
     contentManager.update(new Content("/testMoveWithForce", ImmutableMap.<String, Object>of("prop1", "value2")));
@@ -934,7 +925,7 @@ public abstract class AbstractContentManagerTest {
       AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
           currentUser, configuration, sharedCache, new LoggingStorageListener(), principalValidatorResolver);
 
-      ContentManagerImpl contentManager = new ContentManagerImpl(client,
+      ContentManagerImpl contentManager = new ContentManagerImpl(fs, client,
           accessControlManager, configuration, sharedCache, new LoggingStorageListener());
       contentManager.update(new Content(path, ImmutableMap.of("prop1", (Object) "value1", "prop2", "valueProp2")));
       Content content = contentManager.get(path);
@@ -958,7 +949,7 @@ public abstract class AbstractContentManagerTest {
 	    AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
 	        currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
 
-	    ContentManagerImpl contentManager = new ContentManagerImpl(client,
+	    ContentManagerImpl contentManager = new ContentManagerImpl(fs, client,
 	        accessControlManager, configuration, null, new LoggingStorageListener());
 
 	    Iterator<Content> children = contentManager.listChildren("/testListChildrenDoesNotExist");
@@ -992,7 +983,7 @@ public abstract class AbstractContentManagerTest {
       AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
               currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
 
-      ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+      ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
               configuration, null,  new LoggingStorageListener());
       contentManager.update(new Content("/testCreateContent", ImmutableMap.of("prop1", (Object) "value1")));
       contentManager.update(new Content("/testCreateContent/test", ImmutableMap.of("prop1", (Object) "value2")));
@@ -1017,7 +1008,7 @@ public abstract class AbstractContentManagerTest {
     AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
         currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
 
-    ContentManagerImpl contentManager = new ContentManagerImpl(client,
+    ContentManagerImpl contentManager = new ContentManagerImpl(fs, client,
         accessControlManager, configuration, null, new LoggingStorageListener());
     contentManager.update(new Content("/testMoveWithChildren", ImmutableMap.of("prop1", (Object) "value1")));
     contentManager.update(new Content("/testMoveWithChildren/movewc", ImmutableMap.of("prop1",
@@ -1037,7 +1028,7 @@ public abstract class AbstractContentManagerTest {
     AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
         currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
 
-    ContentManagerImpl contentManager = new ContentManagerImpl(client,
+    ContentManagerImpl contentManager = new ContentManagerImpl(fs, client,
         accessControlManager, configuration, null, new LoggingStorageListener());
     contentManager.update(new Content("/testMoveWithChildren", ImmutableMap.of("prop1", (Object) "value1")));
     contentManager.update(new Content("/testMoveWithChildren/movewc", ImmutableMap.of("prop1",

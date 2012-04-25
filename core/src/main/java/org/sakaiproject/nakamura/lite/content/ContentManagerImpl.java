@@ -236,11 +236,12 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     }
 
 
-    public Iterator<Content> listChildren(String path) throws StorageClientException {
+    public Iterator<Content> listChildren(final String path) throws StorageClientException {
     	if (!exists(path))
     		return (new LinkedList<Content>()).iterator();
       
-  		final String[] children = getFileFromContentPath(path).list();
+  		final String[] children = getFileFromContentPath(path).list(new LiveContentFilenameFilter(
+  		    String.format("%s:", PREFIX_CONTENT)));
   		if (ArrayUtils.isEmpty(children))
   			return (new LinkedList<Content>()).iterator();
   		
@@ -255,7 +256,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
   					int current = i++;
   					try {
   					  String contentPath = getContentPath(children[current]); 
-  						content = get(contentPath);
+  						content = get(StorageClientUtils.newPath(path, contentPath));
   					} catch (StorageClientException e) {
   						LOGGER.debug("Generic error iterating over child {}", children[current]);
   					} catch (AccessDeniedException e) {
@@ -280,7 +281,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       if (!exists(path))
       	return (new LinkedList<String>()).iterator();
       
-      final String[] children = getFileFromContentPath(path).list();
+      final String[] children = getFileFromContentPath(path).list(new LiveContentFilenameFilter(
+          String.format("%s:", PREFIX_CONTENT)));
       
   		if (ArrayUtils.isEmpty(children))
   			return (new LinkedList<String>()).iterator();
@@ -342,7 +344,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     private void triggerRefreshAll(String path) throws StorageClientException {
     	if (User.ADMIN_USER.equals(accessControlManager.getCurrentUserId()) ) {
     		File file = getFileFromContentPath(path);
-    		FileFilter liveContentFileFilter = new LiveContentFileFilter();
+    		FileFilter liveContentFileFilter = new LiveContentFileFilter(String.format("%s:", PREFIX_CONTENT));
     		for (File child : file.listFiles(liveContentFileFilter)) {
     		  String childContentPath = getContentPath(child.getAbsolutePath());
     		  triggerRefreshAll(childContentPath);
@@ -544,7 +546,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         copyProperties.putAll(f.getProperties());
         
         if (withStreams) {
-        	StreamFileFilter streamFileFilter = new StreamFileFilter();
+        	StreamFileFilter streamFileFilter = new StreamFileFilter(PREFIX_STREAM);
         	File fromFile = getFileFromContentPath(from);
           for (File streamFile : fromFile.listFiles(streamFileFilter)) {
         		streams.add(streamFileFilter.getStreamId(streamFile.getName()));
@@ -677,7 +679,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         accessControlManager.check(Security.ZONE_CONTENT, path, Permissions.CAN_READ);
         List<Integer> versionHistory = new LinkedList<Integer>();
         if (exists(path)) {
-        	VersionFileFilter versionFilter = new VersionFileFilter();
+        	VersionFileFilter versionFilter = new VersionFileFilter(PREFIX_VERSION);
           File target = getFileFromContentPath(path);
           for (File versionFile : target.listFiles(versionFilter)) {
         		// this version file is for the target file name. log it
@@ -1018,71 +1020,5 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     	} catch (IOException e) {
     		LOGGER.warn("Failed to close output stream.", e);
     	}
-    }
-
-    /**
-     * A file filter to help identify what is a live piece of externally-visible path content,
-     * and what is a system/internal file or folder.
-     */
-    private class LiveContentFileFilter implements FileFilter {
-  		public boolean accept(File pathname) {
-  			return pathname.isDirectory() && !pathname.getName().startsWith(PREFIX_CONTENT);
-  		}
-    }
-    
-    /**
-     * A file filter to help identify what is an internal stream file.
-     */
-    private class StreamFileFilter implements FileFilter {
-		
-    	/* (non-Javadoc)
-    	 * 
-    	 * Determines whether or not the given file represents a binary content stream.
-    	 * 
-    	 * @see java.io.FileFilter#accept(java.io.File)
-    	 */
-    	public boolean accept(File pathname) {
-  			return pathname.isFile() && pathname.getName().startsWith(PREFIX_STREAM);
-  		}
-    	
-    	/**
-    	 * Get the target streamId from the given stream file name.
-    	 * 
-    	 * @param fileName
-    	 * @return
-    	 */
-    	public String getStreamId(String fileName) {
-    		return fileName.replace(PREFIX_STREAM, "");
-    	}
-    }
-    
-    /**
-     * A utility class that helps identify files that are version stores, and helps parse the
-     * required information out of that version file name.
-     */
-    private class VersionFileFilter implements FileFilter {
-
-    	private final Pattern PATTERN_VERSION = Pattern.compile(String.format(
-    			"%s:([0-9]+)", PREFIX_VERSION));
-    			
-  		/* (non-Javadoc)
-  		 * 
-  		 * Determine whether or not the given file is a version store for another file.
-  		 *  
-  		 * @see java.io.FileFilter#accept(java.io.File)
-  		 */
-  		public boolean accept(File pathname) {
-  			return PATTERN_VERSION.matcher(pathname.getName()).matches();
-  		}
-  		
-  		/**
-  		 * Get the version number the given filename represents.
-  		 * 
-  		 * @param fileName
-  		 * @return
-  		 */
-  		public Integer getVersionNumber(String fileName) {
-  			return Integer.valueOf(PATTERN_VERSION.matcher(fileName).group(1));
-  		}
     }
 }
