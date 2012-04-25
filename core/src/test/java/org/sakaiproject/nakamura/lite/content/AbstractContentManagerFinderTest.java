@@ -24,14 +24,27 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
 
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
+import org.hibernate.search.annotations.Field;
+import org.hibernate.search.annotations.FieldBridge;
+import org.hibernate.search.annotations.Index;
+import org.hibernate.search.annotations.Indexed;
+import org.hibernate.search.annotations.ProvidedId;
+import org.hibernate.search.annotations.Store;
+import org.hibernate.search.bridge.builtin.ArrayBridge;
+import org.infinispan.io.GridFilesystem;
+import org.infinispan.manager.CacheContainer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.Configuration;
+import org.sakaiproject.nakamura.api.lite.IndexDocument;
+import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
@@ -39,8 +52,9 @@ import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorResolv
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.api.lite.content.ContentManager;
-import org.sakaiproject.nakamura.lite.ConfigurationImpl;
+import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AccessControlManagerImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.PrincipalValidatorResolverImpl;
@@ -59,23 +73,27 @@ import java.util.Set;
 public abstract class AbstractContentManagerFinderTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractContentManagerTest.class);
+    private RepositoryImpl repository;
+    private CacheContainer cacheContainer;
+    private GridFilesystem fs;
     private StorageClient client;
-    private ConfigurationImpl configuration;
+    private Configuration configuration;
     private StorageClientPool clientPool;
     private PrincipalValidatorResolver principalValidatorResolver = new PrincipalValidatorResolverImpl();
 
     @Before
     public void before() throws StorageClientException, AccessDeniedException, ClientPoolException,
             ClassNotFoundException, IOException {
-        configuration = new ConfigurationImpl();
-        Map<String, Object> properties = Maps.newHashMap();
-        properties.put("keyspace", "n");
-        properties.put("acl-column-family", "ac");
-        properties.put("authorizable-column-family", "au");
-        properties.put("content-column-family", "cn");
-        configuration.activate(properties);
-        clientPool = getClientPool(configuration);
+      
+        // create a repository and bind the test document factory to it.
+        repository = (new BaseMemoryRepository()).getRepository();
+        repository.bindIndexDocumentFactory(new TestIndexDocumentFactory());
+        
+        configuration = repository.getConfiguration();
+        clientPool = repository.getConnectionPool();
         client = clientPool.getClient();
+        cacheContainer = repository.getCacheContainer();
+        fs = repository.getGridFilesystem();
         AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
                 configuration);
         authorizableActivator.setup();
@@ -99,7 +117,7 @@ public abstract class AbstractContentManagerFinderTest {
                 currentUser, configuration, null, new LoggingStorageListener(),
                 principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration, null, new LoggingStorageListener());
         contentManager.update(new Content("/simpleFind", ImmutableMap.of("sakai:marker",
                 (Object) "testSimpleFindvalue1")));
@@ -110,9 +128,9 @@ public abstract class AbstractContentManagerFinderTest {
         contentManager.update(new Content("/simpleFind/test/ing", ImmutableMap.of("sakai:marker",
                 (Object) "testSimpleFindvalue4")));
 
-        verifyResults(contentManager.find(ImmutableMap.of("sakai:marker", (Object) "testSimpleFindvalue4")),
+        verifyResults(contentManager.find(createSimpleMarkerQuery("testSimpleFindvalue4")),
                 ImmutableSet.of("/simpleFind/test/ing"));
-        verifyResults(contentManager.find(ImmutableMap.of("sakai:marker", (Object) "testSimpleFindvalue1")),
+        verifyResults(contentManager.find(createSimpleMarkerQuery("testSimpleFindvalue1")),
                 ImmutableSet.of("/simpleFind", "/simpleFind/item2"));
 
     }
@@ -126,7 +144,7 @@ public abstract class AbstractContentManagerFinderTest {
                 currentUser, configuration, null, new LoggingStorageListener(),
                 principalValidatorResolver);
 
-        ContentManagerImpl contentManager = new ContentManagerImpl(client, accessControlManager,
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
                 configuration, null, new LoggingStorageListener());
         contentManager.update(new Content("/simpleFind", ImmutableMap.of("sakai:marker",
                 (Object) "testSimpleFindvalue1")));

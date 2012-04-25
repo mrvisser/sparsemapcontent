@@ -36,7 +36,7 @@ public class AuthorizableIndexDocumentFactory implements IndexDocumentFactory {
 
   private static final Map<String, String> PROPERTY_MAPPING = ImmutableMap.<String, String>of(
       "rep:principalName", "principalName");
-  
+
   /**
    * {@inheritDoc}
    * @see org.sakaiproject.nakamura.api.lite.IndexDocumentFactory#createIndexDocument(java.lang.String, java.util.Map)

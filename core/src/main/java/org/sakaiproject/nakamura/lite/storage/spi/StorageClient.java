@@ -19,11 +19,9 @@ package org.sakaiproject.nakamura.lite.storage.spi;
 
 import org.apache.lucene.search.Query;
 import org.infinispan.query.QueryIterator;
-import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -130,7 +128,7 @@ public interface StorageClient {
      * @param documents
      * @throws StorageClientException
      */
-    void updateIndex(List<IndexDocument> documents) throws StorageClientException;
+    void updateIndex(String key, Map<String, Object> values) throws StorageClientException;
     
     /**
      * Remove the given documents from the index.
@@ -138,7 +136,7 @@ public interface StorageClient {
      * @param documents
      * @throws StorageClientException
      */
-    void removeIndex(List<IndexDocument> documents) throws StorageClientException;
+    void removeIndex(String key, Map<String, Object> values) throws StorageClientException;
     
     void setStorageClientListener(StorageClientListener storageClientListener);
 

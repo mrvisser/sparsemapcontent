@@ -73,7 +73,7 @@ public class InfinispanStorageClient implements StorageClient {
 			}
 		}
 		
-		index(key, mutableValues);
+		updateIndex(key, mutableValues);
 
 		if (storageClientListener != null) {
 			storageClientListener.before(cacheName, key, before);
@@ -92,13 +92,18 @@ public class InfinispanStorageClient implements StorageClient {
 	  String nsKey = getNamespacedKey(columnFamily, key);
 		Map<String, Object> values = get(cacheName, columnFamily, key);
 		if (values != null) {
-		  List<IndexDocument> documents = getIndexedDocuments(key, values);
-		  removeIndex(documents);
+		  removeIndex(key, values);
 			getCache(cacheName).remove(nsKey);
 		}
 	}
 
   public QueryIterator find(Query query) throws StorageClientException {
+    
+    // dump the index (remove)
+    for (String key : indexCache.keySet()) {
+      System.out.println(String.format("%s: %s\n", key, indexCache.get(key).getId()));
+    }
+    
 	  return getCacheQuery(query).lazyIterator();
 	}
 
@@ -148,31 +153,31 @@ public class InfinispanStorageClient implements StorageClient {
 		this.storageClientListener = storageClientListener;
 	}
 	
-	public void updateIndex(List<IndexDocument> documents) throws StorageClientException {
+	public void removeIndex(String key, Map<String, Object> values) throws StorageClientException {
+	  List<IndexDocument> documents = getIndexedDocuments(key, values);
 	  if (documents != null) {
 	    for (IndexDocument document : documents) {
-	      String key = String.format("%s:%s", document.getClass().getCanonicalName(),
-	          document.getId());
-	      indexCache.put(key, document);
+	      String docKey = getDocKey(document);
+	      indexCache.remove(docKey);
 	    }
 	  }
 	}
-	
-	public void removeIndex(List<IndexDocument> documents) throws StorageClientException {
-	  if (documents != null) {
-	    for (IndexDocument document : documents) {
-	      String key = String.format("%s:%s", document.getClass().getCanonicalName(),
-            document.getId());
-	      indexCache.remove(key);
-	    }
-	  }
-	}
-	
-	private void index(String key, Map<String, Object> content)
-	    throws StorageClientException {
-	  updateIndex(getIndexedDocuments(key, content));
-	}
-	
+
+  public void updateIndex(String key, Map<String, Object> values) throws StorageClientException {
+    List<IndexDocument> documents = getIndexedDocuments(key, values);
+    if (documents != null) {
+      for (IndexDocument document : documents) {
+        // namespace the key by the document class to avoid collisions with other indexed documents
+        indexCache.put(getDocKey(document), document);
+      }
+    }
+  }
+  
+  private String getDocKey(IndexDocument document) {
+    return String.format("%s:%s", document.getClass().getCanonicalName(),
+        document.getId());
+  }
+  
 	private List<IndexDocument> getIndexedDocuments(String key, Map<String, Object> content) {
 	  List<IndexDocument> toIndex = new LinkedList<IndexDocument>();
     for (IndexDocumentFactory factory : indexes) {

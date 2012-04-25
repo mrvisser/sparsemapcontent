@@ -18,6 +18,7 @@
 package org.sakaiproject.nakamura.api.lite.content;
 
 import org.apache.lucene.search.Query;
+import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalTokenResolver;

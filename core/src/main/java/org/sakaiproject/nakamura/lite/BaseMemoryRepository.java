@@ -26,12 +26,11 @@ import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
-import org.sakaiproject.nakamura.lite.authorizable.AuthorizableIndexDocumentFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -64,16 +63,11 @@ public class BaseMemoryRepository {
             createInMemoryIndexedCache());
         
         repository = new RepositoryImpl(cacheContainer, configuration,
-            new LoggingStorageListener(), Arrays.asList((IndexDocumentFactory)
-                new AuthorizableIndexDocumentFactory()));
+            new LoggingStorageListener(), Collections.<IndexDocumentFactory>emptyList());
     }
 
     public void close() {
-      try {
-        repository.deactivate(ImmutableMap.<String, Object>of());
-      } catch (ClientPoolException e) {
-        LOGGER.warn("Error closing base memory repository.", e);
-      }
+      repository.deactivate(ImmutableMap.<String, Object>of());
     }
 
     public RepositoryImpl getRepository() {
@@ -86,6 +80,7 @@ public class BaseMemoryRepository {
     
     private org.infinispan.configuration.cache.Configuration createInMemoryIndexedCache() {
       return (new ConfigurationBuilder()).indexing().enable().indexLocalOnly(true)
-          .addProperty("hibernate.search.default.directory_provider", "ram").build();
+          .addProperty("hibernate.search.oae.directory_provider", "ram")
+          .addProperty("hibernate.search.lucene_version", "LUCENE_35").build();
     }
 }

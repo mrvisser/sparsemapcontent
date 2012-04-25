@@ -17,6 +17,8 @@
  */
 package org.sakaiproject.nakamura.lite;
 
+import com.google.common.collect.ImmutableSet;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
@@ -32,6 +34,7 @@ import org.infinispan.manager.DefaultCacheManager;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.Configuration;
+import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.Session;
@@ -43,6 +46,7 @@ import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorResolv
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
+import org.sakaiproject.nakamura.lite.authorizable.AuthorizableIndexDocumentFactory;
 import org.sakaiproject.nakamura.lite.storage.infinispan.InfinispanStorageClient;
 import org.sakaiproject.nakamura.lite.storage.infinispan.InfinispanStorageClientPool;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
@@ -50,6 +54,7 @@ import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -60,6 +65,9 @@ public class RepositoryImpl implements Repository {
   
     private static final Logger LOGGER = LoggerFactory.getLogger(RepositoryImpl.class);
 
+    private static final Collection<IndexDocumentFactory> INDEXED_DOCUMENTS_INTERNAL =
+        ImmutableSet.<IndexDocumentFactory>of(new AuthorizableIndexDocumentFactory());
+    
     @Reference
     protected Configuration configuration;
 
@@ -110,6 +118,8 @@ public class RepositoryImpl implements Repository {
     private void doStandardActivation() throws StorageClientException, AccessDeniedException {
       StorageClient client = null;
       try {
+        indexes.addAll(INDEXED_DOCUMENTS_INTERNAL);
+        
         clientPool = new InfinispanStorageClientPool(cacheContainer, configuration, indexes);
         client = clientPool.getClient();
           
@@ -134,9 +144,11 @@ public class RepositoryImpl implements Repository {
     }
     
     @Deactivate
-    public void deactivate(Map<String, Object> properties) throws ClientPoolException {
-      if (cacheContainer != null)
+    public void deactivate(Map<String, Object> properties) {
+      if (cacheContainer != null) {
         cacheContainer.stop();
+      }
+      indexes.clear();
     }
 
     public Session login(String username, String password) throws ClientPoolException,
@@ -266,6 +278,14 @@ public class RepositoryImpl implements Repository {
       return this.clientPool;
     }
     
+    public CacheContainer getCacheContainer() {
+      return this.cacheContainer;
+    }
+    
+    public GridFilesystem getGridFilesystem() {
+      return this.fs;
+    }
+    
     public void setConnectionPool(StorageClientPool connectionPool) {
         this.clientPool = connectionPool;
     }
@@ -277,13 +297,11 @@ public class RepositoryImpl implements Repository {
     
     public void bindIndexDocumentFactory(IndexDocumentFactory factory) throws ClientPoolException {
       indexes.add(factory);
-      ((InfinispanStorageClient)clientPool.getClient()).addIndexDocumentFactory(factory);
     }
 
     public void unbindIndexDocumentFactory(IndexDocumentFactory factory)
         throws ClientPoolException {
       indexes.remove(factory);
-      ((InfinispanStorageClient)clientPool.getClient()).removeIndexDocumentFactory(factory);
     }
 
 }

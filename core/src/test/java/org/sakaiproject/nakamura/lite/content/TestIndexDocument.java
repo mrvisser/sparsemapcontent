@@ -15,7 +15,7 @@
  * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.sakaiproject.nakamura.lite.authorizable;
+package org.sakaiproject.nakamura.lite.content;
 
 import org.hibernate.search.annotations.Field;
 import org.hibernate.search.annotations.Index;
@@ -25,27 +25,23 @@ import org.hibernate.search.annotations.Store;
 import org.sakaiproject.nakamura.api.lite.IndexDocument;
 
 /**
- * An index document that indexes the authorizable type of an authorizable.
+ * Index document used to test searches in this test suite.
  */
 @Indexed(index="oae") @ProvidedId
-public class AuthorizableIndexDocument implements IndexDocument {
-  private static final long serialVersionUID = 8145154672982930645L;
+public class TestIndexDocument implements IndexDocument {
+  private static final long serialVersionUID = 6667650051279739243L;
 
-  @Field(index=Index.NO, store=Store.YES)
+  @Field(index=Index.NO,store=Store.YES)
   public String id;
   
   @Field
-  public String type;
-
-  @Field
-  public String principalName;
+  public String marker;
   
   public String getId() {
-    return id;
+    return this.id;
   }
 
   public void setId(String id) {
     this.id = id;
   }
-  
 }
