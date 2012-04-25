@@ -18,6 +18,7 @@
 package org.sakaiproject.nakamura.lite.storage.spi;
 
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
 import org.infinispan.query.QueryIterator;
 import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
@@ -84,7 +85,7 @@ public interface StorageClient {
      * @return an iterator of results
      * @throws StorageClientException
      */
-    QueryIterator find(Query query) throws StorageClientException;
+    QueryIterator find(Query query, Sort sort) throws StorageClientException;
 
     /**
      * Find the <b>maximum</b> number of results that could be returned in a query. This ignores

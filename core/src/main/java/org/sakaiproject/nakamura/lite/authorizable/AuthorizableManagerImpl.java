@@ -516,7 +516,7 @@ public class AuthorizableManagerImpl extends CachingManagerImpl implements Autho
         Query propQuery = new TermQuery(new Term(termName, value));
         query.add(propQuery, Occur.MUST);
         
-        final QueryIterator docs = client.find(query);
+        final QueryIterator docs = client.find(query, null);
         
         return new PreemptiveIterator<Authorizable>() {
 

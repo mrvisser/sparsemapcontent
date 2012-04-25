@@ -40,6 +40,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
 import org.infinispan.io.GridFilesystem;
 import org.infinispan.query.QueryIterator;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
@@ -151,9 +152,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 
 
     private static final Set<String> PROTECTED_FIELDS = ImmutableSet.of(LASTMODIFIED_FIELD,
-                                                                        LASTMODIFIED_BY_FIELD,
-                                                                        UUID_FIELD,
-                                                                        PATH_FIELD);
+                                                                        LASTMODIFIED_BY_FIELD);
     
     
     // These properties copied from AccessControlManager to keep from binding
@@ -743,14 +742,14 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         return LOGGER;
     }
 
-    public Iterable<Content> find(final Query query) throws StorageClientException,
+    public Iterable<Content> find(final Query query, final Sort sort) throws StorageClientException,
         AccessDeniedException {
       checkOpen();
       return new Iterable<Content>() {
         public Iterator<Content> iterator() {
             Iterator<Content> contentResultsIterator = null;
             try {
-              final QueryIterator documents = client.find(query);
+              final QueryIterator documents = client.find(query, sort);
               
               contentResultsIterator = new PreemptiveIterator<Content>() {
                   private Content contentResult;

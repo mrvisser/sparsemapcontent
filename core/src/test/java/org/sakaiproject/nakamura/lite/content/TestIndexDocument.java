@@ -17,17 +17,23 @@
  */
 package org.sakaiproject.nakamura.lite.content;
 
+import org.apache.lucene.analysis.KeywordAnalyzer;
+import org.hibernate.search.annotations.Analyzer;
 import org.hibernate.search.annotations.Field;
+import org.hibernate.search.annotations.FieldBridge;
 import org.hibernate.search.annotations.Index;
 import org.hibernate.search.annotations.Indexed;
 import org.hibernate.search.annotations.ProvidedId;
 import org.hibernate.search.annotations.Store;
+import org.hibernate.search.bridge.builtin.impl.BuiltinArrayBridge;
 import org.sakaiproject.nakamura.api.lite.IndexDocument;
 
 /**
  * Index document used to test searches in this test suite.
  */
-@Indexed(index="oae") @ProvidedId
+@Indexed(index="oae")
+@ProvidedId
+@Analyzer(impl=KeywordAnalyzer.class)
 public class TestIndexDocument implements IndexDocument {
   private static final long serialVersionUID = 6667650051279739243L;
 
@@ -36,6 +42,9 @@ public class TestIndexDocument implements IndexDocument {
   
   @Field
   public String marker;
+  
+  @Field @FieldBridge(impl=BuiltinArrayBridge.class)
+  public String[] category;
   
   public String getId() {
     return this.id;

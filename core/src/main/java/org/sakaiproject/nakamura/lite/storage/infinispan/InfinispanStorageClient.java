@@ -4,6 +4,7 @@
 package org.sakaiproject.nakamura.lite.storage.infinispan;
 
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
 import org.infinispan.Cache;
 import org.infinispan.manager.CacheContainer;
 import org.infinispan.query.CacheQuery;
@@ -97,23 +98,21 @@ public class InfinispanStorageClient implements StorageClient {
 		}
 	}
 
-  public QueryIterator find(Query query) throws StorageClientException {
-    
-    // dump the index (remove)
-    for (String key : indexCache.keySet()) {
-      System.out.println(String.format("%s: %s\n", key, indexCache.get(key).getId()));
-    }
-    
-	  return getCacheQuery(query).lazyIterator();
+  public QueryIterator find(Query query, Sort sort) throws StorageClientException {
+	  return getCacheQuery(query, sort).lazyIterator();
 	}
 
   public int count(Query query) throws StorageClientException {
-    return getCacheQuery(query).getResultSize();
+    return getCacheQuery(query, null).getResultSize();
   }
   
-  private CacheQuery getCacheQuery(Query query) throws StorageClientException {
+  private CacheQuery getCacheQuery(Query query, Sort sort) throws StorageClientException {
     SearchManager searchManager = org.infinispan.query.Search.getSearchManager(indexCache);
-    return searchManager.getQuery(query);
+    CacheQuery cacheQuery = searchManager.getQuery(query);
+    if (sort != null) {
+      cacheQuery.sort(sort);
+    }
+    return cacheQuery;
   }
   
 	public void close() {
