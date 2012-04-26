@@ -43,13 +43,22 @@ public class BaseMemoryRepository {
     private ConfigurationImpl configuration;
     private RepositoryImpl repository;
 
-    public BaseMemoryRepository() throws StorageClientException, AccessDeniedException,
+    public BaseMemoryRepository() throws ClientPoolException, StorageClientException,
+        AccessDeniedException, ClassNotFoundException, IOException {
+      this(true);
+    }
+    
+    public BaseMemoryRepository(boolean indexingEnabled) throws StorageClientException, AccessDeniedException,
             ClientPoolException, ClassNotFoundException, IOException {
       
+        LOGGER.info("Creating in-memory Repository with 'cachingEnabled' set to {}",
+            String.valueOf(indexingEnabled));
+        
         configuration = new ConfigurationImpl();
         Map<String, Object> properties = Maps.newHashMap();
         properties.put("acl-column-family", "ac");
         properties.put("authorizable-column-family", "au");
+        properties.put("lock-column-family", "ln");
         configuration.activate(properties);
         
         DefaultCacheManager cacheContainer = new DefaultCacheManager(true);
@@ -59,13 +68,24 @@ public class BaseMemoryRepository {
             createInMemoryCache());
         cacheContainer.defineConfiguration(configuration.getAuthCacheName(),
             createInMemoryCache());
+        
+        org.infinispan.configuration.cache.Configuration indexCacheConfiguration =
+            createInMemoryCache();
+        
+        // disabling caching can remove runtime dependency on lucene, which is sometimes
+        // desired in unit tests. the 'find' methods will not work when indexes are not
+        // enabled.
+        if (indexingEnabled) {
+          indexCacheConfiguration = createInMemoryIndexedCache();
+        }     
+        
         cacheContainer.defineConfiguration(configuration.getIndexCacheName(),
-            createInMemoryIndexedCache());
+            indexCacheConfiguration);
         
         repository = new RepositoryImpl(cacheContainer, configuration,
             new LoggingStorageListener(), Collections.<IndexDocumentFactory>emptyList());
     }
-
+    
     public void close() {
       repository.deactivate(ImmutableMap.<String, Object>of());
     }
