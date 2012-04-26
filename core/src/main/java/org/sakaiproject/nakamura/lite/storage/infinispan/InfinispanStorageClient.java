@@ -3,6 +3,8 @@
  */
 package org.sakaiproject.nakamura.lite.storage.infinispan;
 
+import com.google.common.collect.Maps;
+
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
 import org.infinispan.Cache;
@@ -195,7 +197,12 @@ public class InfinispanStorageClient implements StorageClient {
 	
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> getMapFromStorage(String cacheName, String key) throws StorageClientException {
-		return (Map<String, Object>) getCache(cacheName).get(key);
+	  Map<String, Object> result = Maps.newHashMap();
+	  Map<String, Object> stored = (Map<String, Object>) getCache(cacheName).get(key); 
+		if (stored != null) {
+		  result.putAll(stored);
+		}
+		return result;
 	}
 
 	private <K, V> Cache<K, V> getCache(String cacheName) throws StorageClientException {

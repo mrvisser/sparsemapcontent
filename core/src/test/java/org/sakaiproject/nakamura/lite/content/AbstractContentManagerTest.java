@@ -724,7 +724,9 @@ public class AbstractContentManagerTest {
                     i++;
                 }
                 if ((i % 100 == 0) && (i < b.length - 20)) {
-                    Assert.assertEquals(10, read.skip(10));
+                    // since read.skip(10) may not necessarily be supported, we do
+                    // read.read(new byte[10]) to achieve the same.
+                    Assert.assertEquals(10, read.read(new byte[10]));
                     i += 10;
                 }
                 j = read.read(buffer);
@@ -733,9 +735,7 @@ public class AbstractContentManagerTest {
             Assert.assertEquals(b.length, i);
 
         } catch (IOException e) {
-
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            LOGGER.error("Did not want IOException.", e);
             Assert.fail();
         }
 

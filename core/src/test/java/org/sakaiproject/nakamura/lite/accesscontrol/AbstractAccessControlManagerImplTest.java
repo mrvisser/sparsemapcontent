@@ -49,15 +49,15 @@ import org.sakaiproject.nakamura.api.lite.authorizable.AuthorizableManager;
 import org.sakaiproject.nakamura.api.lite.authorizable.Group;
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.api.lite.content.Content;
+import org.sakaiproject.nakamura.api.lite.content.ContentManager;
+import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
 import org.sakaiproject.nakamura.lite.ConfigurationImpl;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableManagerImpl;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
-import org.sakaiproject.nakamura.api.lite.content.ContentManager;
-import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,33 +68,24 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-public abstract class AbstractAccessControlManagerImplTest {
+public class AbstractAccessControlManagerImplTest {
     private static final Logger LOGGER = LoggerFactory
             .getLogger(AbstractAccessControlManagerImplTest.class);
+    private RepositoryImpl repository;
     private StorageClient client;
-    private ConfigurationImpl configuration;
+    private Configuration configuration;
     private StorageClientPool clientPool;
     private PrincipalValidatorResolver principalValidatorResolver = new PrincipalValidatorResolverImpl();
 
     @Before
     public void before() throws StorageClientException, AccessDeniedException, ClientPoolException,
             ClassNotFoundException, IOException {
-        configuration = new ConfigurationImpl();
-        Map<String, Object> properties = Maps.newHashMap();
-        properties.put("keyspace", "n");
-        properties.put("acl-column-family", "ac");
-        properties.put("authorizable-column-family", Security.ZONE_AUTHORIZABLES);
-        configuration.activate(properties);
-        clientPool = getClientPool(configuration);
-        client = clientPool.getClient();
-        AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
-                configuration);
-        authorizableActivator.setup();
-        LOGGER.info("Setup Complete");
+      repository = (new BaseMemoryRepository()).getRepository();
+      configuration = repository.getConfiguration();
+      clientPool = repository.getConnectionPool();
+      client = clientPool.getClient();
+      LOGGER.info("Setup Complete");
     }
-
-    protected abstract StorageClientPool getClientPool(Configuration configuration)
-            throws ClassNotFoundException;
 
     @After
     public void after() throws ClientPoolException {

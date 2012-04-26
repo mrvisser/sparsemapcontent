@@ -19,6 +19,7 @@ package org.sakaiproject.nakamura.lite.content;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
@@ -28,11 +29,13 @@ import java.util.regex.Pattern;
  */
 public class VersionFileFilter implements FileFilter {
 
+  private final String regex;
   private final Pattern versionPattern;
   
+  
   public VersionFileFilter(String versionNamePrefix) {
-    this.versionPattern = Pattern.compile(String.format(
-        "%s:([0-9]+)", versionNamePrefix));
+    this.regex = String.format("^%s:([0-9]+)$", versionNamePrefix);
+    this.versionPattern = Pattern.compile(regex);
   }
   
   /* (non-Javadoc)
@@ -42,7 +45,8 @@ public class VersionFileFilter implements FileFilter {
    * @see java.io.FileFilter#accept(java.io.File)
    */
   public boolean accept(File pathname) {
-    return versionPattern.matcher(pathname.getName()).matches();
+    String name = pathname.getName();
+    return versionPattern.matcher(name).matches();
   }
   
   /**
@@ -52,6 +56,10 @@ public class VersionFileFilter implements FileFilter {
    * @return
    */
   public Integer getVersionNumber(String fileName) {
-    return Integer.valueOf(versionPattern.matcher(fileName).group(1));
+    Matcher m = versionPattern.matcher(fileName);
+    if (m.matches()) {
+      return Integer.valueOf(m.group(1));
+    }
+    return null;
   }
 }

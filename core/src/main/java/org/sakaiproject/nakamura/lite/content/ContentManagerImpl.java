@@ -18,17 +18,14 @@
 package org.sakaiproject.nakamura.lite.content;
 
 import static org.sakaiproject.nakamura.lite.content.InternalContent.COPIED_DEEP_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.COPIED_FROM_ID_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.COPIED_FROM_PATH_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.CREATED_BY_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.CREATED_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.DELETED_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.LASTMODIFIED_BY_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.LASTMODIFIED_FIELD;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.PATH_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.READONLY_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.TRUE;
-import static org.sakaiproject.nakamura.lite.content.InternalContent.UUID_FIELD;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -69,8 +66,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -84,7 +79,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * <pre>
@@ -167,6 +161,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     private static final String PREFIX_CONTENT = "oae";
     private static final String PREFIX_STREAM = String.format("%s:%s", PREFIX_CONTENT, "stream");
     private static final String PREFIX_VERSION = String.format("%s:%s", PREFIX_CONTENT, "version");
+    private static final String PREFIX_PROP_VERSION_METADATA = "metadata";
     
     private static final String FILE_PROPERTIES = String.format("%s:%s", PREFIX_CONTENT, "props");
     private static final String FILE_STREAM_DEFAULT = PREFIX_STREAM;
@@ -255,8 +250,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
   				while (content == null && i < children.length) {
   					int current = i++;
   					try {
-  					  String contentPath = getContentPath(children[current]); 
-  						content = get(StorageClientUtils.newPath(path, contentPath));
+  					  String contentPath = StorageClientUtils.newPath(path, children[current]); 
+  						content = get(contentPath);
   					} catch (StorageClientException e) {
   						LOGGER.debug("Generic error iterating over child {}", children[current]);
   					} catch (AccessDeniedException e) {
@@ -296,7 +291,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
   				nextPath = null;
   				while (nextPath == null && i < children.length) {
   					int current = i++;
-  					String contentPath = getContentPath(children[current]);
+  					String contentPath = StorageClientUtils.newPath(path, children[current]);
   					if (exists(contentPath)) {
   						nextPath = contentPath;
   						break;
@@ -459,6 +454,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         	Map<String, Object> contentBeforeDelete = content.getProperties();
         	String resourceType = (String) contentBeforeDelete.get("sling:resourceType");
         	putProperties(path, ImmutableMap.of(DELETED_FIELD, (Object) TRUE));
+        	hardDeleteStreams(path);
+        	hardDeleteVersions(path);
         	eventListener.onDelete(Security.ZONE_CONTENT, path, accessControlManager.getCurrentUserId(), resourceType, contentBeforeDelete);
         }
     }
@@ -484,7 +481,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         
         OutputStream os = null;
         try {
-        	os = new FileOutputStream(streamFile);
+        	os = fs.getOutput(streamFile.getAbsolutePath());
         	IOUtils.copyLarge(in, os);
         } finally {
         	closeSilent(os);
@@ -509,7 +506,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         File streamFile = getFileFromContentPath(streamPath);
         if (!streamFile.exists())
         	return null;
-        return new FileInputStream(streamFile);
+        return fs.getInput(streamFile);
     }
 
     public void close() {
@@ -530,47 +527,55 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     public void copy(String from, String to, boolean withStreams) throws StorageClientException,
             AccessDeniedException, IOException {
         checkOpen();
+        copyInternal(from, to, withStreams);
         
-        // To Copy, get the to object out and copy everything over.
-        Content f = get(from);
-        if (f == null) {
-            throw new StorageClientException(" Source content " + from + " does not exist");
-        }
-        Content t = get(to);
-        if (t != null) {
-           LOGGER.debug("Deleting {} ",to);
-           delete(to);
-        }
-        Set<String> streams = Sets.newHashSet();
-        Map<String, Object> copyProperties = Maps.newHashMap();
-        copyProperties.putAll(f.getProperties());
+        Content copiedContent = get(to);
+        copiedContent.setProperty(COPIED_FROM_PATH_FIELD, from);
+        copiedContent.setProperty(COPIED_DEEP_FIELD, withStreams);
+        update(copiedContent);
         
-        if (withStreams) {
-        	StreamFileFilter streamFileFilter = new StreamFileFilter(PREFIX_STREAM);
-        	File fromFile = getFileFromContentPath(from);
-          for (File streamFile : fromFile.listFiles(streamFileFilter)) {
-        		streams.add(streamFileFilter.getStreamId(streamFile.getName()));
+        eventListener.onUpdate(Security.ZONE_CONTENT, to, accessControlManager.getCurrentUserId(),
+            getResourceType(copiedContent), true, null, "op:copy");
+    }
+    
+    private void copyInternal(String from, String to, boolean withStreams)
+        throws StorageClientException, AccessDeniedException, IOException {
+      // To Copy, get the to object out and copy everything over.
+      Content f = get(from);
+      if (f == null) {
+          throw new StorageClientException(" Source content " + from + " does not exist");
+      }
+      Content t = get(to);
+      if (t != null) {
+         LOGGER.debug("Deleting {} ",to);
+         delete(to);
+      }
+      Set<String> streams = Sets.newHashSet();
+      Map<String, Object> copyProperties = Maps.newHashMap();
+      copyProperties.putAll(f.getProperties());
+      
+      if (withStreams) {
+        StreamFileFilter streamFileFilter = new StreamFileFilter(PREFIX_STREAM);
+        File fromFile = getFileFromContentPath(from);
+        for (File streamFile : fromFile.listFiles(streamFileFilter)) {
+          streams.add(streamFileFilter.getStreamId(streamFile.getName()));
+        }
+      }
+      
+      
+      t = new Content(to, copyProperties);
+      update(t);
+      LOGGER.debug("Copy Updated {} {} ",to,t);
+
+      for (String stream : streams) {
+          InputStream fromStream = null;
+          try {
+            fromStream = getInputStream(from, stream);
+            writeBody(to, fromStream);
+          } finally {
+            closeSilent(fromStream);
           }
-        }
-        
-        copyProperties.put(COPIED_FROM_PATH_FIELD, from);
-        copyProperties.put(COPIED_FROM_ID_FIELD, f.getProperty(UUID_FIELD));
-        copyProperties.put(COPIED_DEEP_FIELD, withStreams);
-        t = new Content(to, copyProperties);
-        update(t);
-        LOGGER.debug("Copy Updated {} {} ",to,t);
-
-        for (String stream : streams) {
-            InputStream fromStream = null;
-            try {
-	            fromStream = getInputStream(from, stream);
-	            writeBody(to, fromStream);
-            } finally {
-            	closeSilent(fromStream);
-            }
-        }
-        eventListener.onUpdate(Security.ZONE_CONTENT, to, accessControlManager.getCurrentUserId(), getResourceType(f), true, null, "op:copy");
-
+      }
     }
 
     public List<ActionRecord> move(String from, String to) throws AccessDeniedException,
@@ -582,66 +587,74 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         throws AccessDeniedException, StorageClientException {
       List<ActionRecord> record = Lists.newArrayList();
 
-      moveContent(from, to, force);
+      // verify we have permission to move this content.
+      checkOpen();
+      accessControlManager.check(Security.ZONE_CONTENT, from, Permissions.CAN_ANYTHING);
+      accessControlManager.check(Security.ZONE_CONTENT, to, Permissions.CAN_READ.combine(Permissions.CAN_WRITE));
 
-      PreemptiveIterator<String> iter = (PreemptiveIterator<String>) listChildPaths(from);
+      if (!exists(from)) {
+          throw new StorageClientException("The source content to move from " + from
+                  + " does not exist, move operation failed");
+      }
+      
+      // verify overwrite flags
+      if (exists(to)) {
+        if (force) {
+          delete(to);
+        } else {
+          throw new StorageClientException("The destination content to move to " + to
+            + " exists, move operation failed");
+        }
+      }
+      
+      // a move is really just a copy followed by a delete.. but this should be atomic.
+      try {
+        
+        // copy the "live" (non-version) node
+        copyInternal(from, to, true);
+        
+        // copy the versions
+        File fromFile = getFileFromContentPath(from);
+        for (File versionDir : fromFile.listFiles(new VersionFileFilter(PREFIX_VERSION))) {
+          String fromVersionPath = StorageClientUtils.newPath(from, versionDir.getName());
+          String toVersionPath = StorageClientUtils.newPath(to, versionDir.getName());
+          copyInternal(fromVersionPath, toVersionPath, true);
+        }
+        
+        eventListener.onUpdate(Security.ZONE_CONTENT, to, accessControlManager.getCurrentUserId(),
+            null, true, null, "op:move");
+        
+      } catch (IOException e) {
+        throw new StorageClientException(String.format(
+            "Exception transferring streams from '%s' to '%s'.", from, to), e);
+      }
+      
+      Iterator<String> iter = listChildPaths(from);
       while (iter.hasNext()) {
         String childPath = iter.next();
-
         // Since this is a direct child of the previous from, only the last token needs to
         // be appended to "to"
         record.addAll(move(childPath, to.concat(childPath.substring(childPath.lastIndexOf("/"))),
         		force));
       }
+      
+
+      // update the indexes by removing the old and updating the new
+      Content content = get(to);
+      client.removeIndex(from, content.getProperties());
+      client.updateIndex(to, content.getProperties());
+      
+      // move the ACLs
+      moveAcl(from, to, force);
+
+      // delete the source after its children have been migrated.
+      delete(from);
+      // move does not add resourceTypes to events.
+      eventListener.onDelete(Security.ZONE_CONTENT, from, accessControlManager.getCurrentUserId(), null, null, "op:move");
+      
 
       record.add(new ActionRecord(from, to));
       return record;
-    }
-    
-    private void moveContent(String from, String to, boolean force) throws AccessDeniedException, StorageClientException {
-        // to move, get the structure object out and modify, recreating parent
-        // objects as necessary.
-        checkOpen();
-        accessControlManager.check(Security.ZONE_CONTENT, from, Permissions.CAN_ANYTHING);
-        accessControlManager.check(Security.ZONE_CONTENT, to,
-                Permissions.CAN_READ.combine(Permissions.CAN_WRITE));
-        
-        if (!exists(from)) {
-            throw new StorageClientException("The source content to move from " + from
-                    + " does not exist, move operation failed");
-        }
-        
-        if (exists(to)) {
-        	if (force) {
-        		delete(to);
-        	} else {
-        		throw new StorageClientException("The destination content to move to " + to
-        			+ " exists, move operation failed");
-        	}
-        }
-        
-        // move all files (not directories) from the source to the destination. this will include
-        // the internal properties file (oae:props) and the named stream bodies.
-        File fromFile = getFileFromContentPath(from);
-        for (File file : fromFile.listFiles()) {
-        	if (!file.isDirectory()) {
-        	  String fromContentPath = StorageClientUtils.newPath(from, file.getName());
-        	  String toContentPath = StorageClientUtils.newPath(to, file.getName());
-        		file.renameTo(getFileFromContentPath(toContentPath));
-        		
-        		// update the indexes by removing the old and updating the new
-        		Content content = get(toContentPath);
-        		client.removeIndex(fromContentPath, content.getProperties());
-        		client.updateIndex(toContentPath, content.getProperties());
-        	}
-        }
-
-        // move the ACLs
-        moveAcl(from, to, force);
-
-        // move does not add resourceTypes to events.
-        eventListener.onDelete(Security.ZONE_CONTENT, from, accessControlManager.getCurrentUserId(), null, null, "op:move");
-        eventListener.onUpdate(Security.ZONE_CONTENT, to, accessControlManager.getCurrentUserId(), null, true, null, "op:move");
     }
 
     public String saveVersion(String path) throws StorageClientException, AccessDeniedException {
@@ -662,14 +675,25 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         
         // simply copy into the next version node
         try {
-        	copy(path, nextVersionDirName, true);
+        	copyInternal(path, nextVersionDirName, true);
         } catch (IOException e) {
         	throw new StorageClientException("Error trying to store content version.", e);
         }
         
         Content savedVersion = get(nextVersionDirName);
+        
+        // apply the content metadata
+        if (versionMetadata != null) {
+          for (Map.Entry<String, Object> entry : versionMetadata.entrySet()) {
+            String key = String.format("%s:%s", PREFIX_PROP_VERSION_METADATA, entry.getKey());
+            savedVersion.setProperty(key, entry.getValue());
+          }
+        }
+        
+        // make version read-only
         savedVersion.setProperty(READONLY_FIELD, TRUE);
         update(savedVersion);
+        
         return nextVersionNumber;
     }
 
@@ -687,7 +711,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
           }
             
           // sort the ints and turn it into a string list
-          Collections.sort(versionHistory);
+          Collections.sort(versionHistory, Collections.reverseOrder());
           List<String> versionHistoryStr = new LinkedList<String>();
           for (Integer version : versionHistory) {
           	versionHistoryStr.add(String.valueOf(version));
@@ -967,7 +991,34 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         	throw new StorageClientException(String.format("Error persisting content at '%s'.", path), e);
         }
     }
-
+    
+    private void hardDeleteStreams(String path) {
+      File dir = getFileFromContentPath(path);
+      if (dir.exists()) {
+        for (File streamFile : dir.listFiles(new StreamFileFilter(PREFIX_STREAM))) {
+          streamFile.delete();
+        }
+      }
+    }
+    
+    private void hardDeleteVersions(String path) {
+      File dir = getFileFromContentPath(path);
+      if (dir.exists()) {
+        // versions are stored in a directory within a content path
+        for (File versionDir : dir.listFiles(new VersionFileFilter(PREFIX_VERSION))) {
+          // must delete the contents of the version directory before the version directory itself
+          for (File versionFile : versionDir.listFiles()) {
+            if (versionFile.isDirectory()) {
+              throw new IllegalStateException(String.format(
+                  "Cannot delete versions with subdirectories at path '%s'", path));
+            }
+            versionFile.delete();
+          }
+          versionDir.delete();
+        }
+      }
+    }
+    
     private File getFileFromContentPath(String contentPath) {
       return fs.getFile(getFilesystemPath(contentPath));
     }
