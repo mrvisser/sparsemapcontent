@@ -10,7 +10,7 @@
 	<groupId>org.sakaiproject.nakamura</groupId>
 	<artifactId>org.sakaiproject.nakamura.core</artifactId>
 	<packaging>bundle</packaging>
-	<version>1.5.1-SNAPSHOT</version>
+	<version>1.5.1.infinispan-SNAPSHOT</version>
 	<name>Sparse Map :: Sparse Map Content Storage bundle.</name>
 	<description>Server that uses a sparse map to represent content mapping closely to a colum database like Cassandra.</description>
 	<properties>
@@ -247,12 +247,6 @@
 		<dependency>
 			<groupId>org.apache.felix</groupId>
 			<artifactId>org.apache.felix.scr.annotations</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.derby</groupId>
-			<artifactId>derby</artifactId>
-			<version>10.6.2.1</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
