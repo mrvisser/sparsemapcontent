@@ -66,9 +66,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-public class AbstractContentManagerTest {
+public class ContentManagerTest {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractContentManagerTest.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ContentManagerTest.class);
     private RepositoryImpl repository;
     private GridFilesystem fs;
     private StorageClient client;

@@ -40,6 +40,11 @@ public interface Configuration {
     String getAuthorizableColumnFamily();
 
     /**
+     * @return name of the column family used for storing locks.
+     */
+    String getLockColumnFamily();
+    
+    /**
      * @return name for the cache that holds ACLs and Authorizables.
      */
     String getAuthCacheName();

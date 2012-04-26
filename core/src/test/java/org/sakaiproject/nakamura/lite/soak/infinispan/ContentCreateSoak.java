@@ -15,7 +15,20 @@
  * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.sakaiproject.nakamura.lite.soak.derby;
+package org.sakaiproject.nakamura.lite.soak.infinispan;
+
+import com.google.common.collect.Maps;
+
+import org.sakaiproject.nakamura.api.lite.ClientPoolException;
+import org.sakaiproject.nakamura.api.lite.StorageClientException;
+import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
+import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
+import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
+import org.sakaiproject.nakamura.lite.soak.AbstractSoakController;
+import org.sakaiproject.nakamura.lite.soak.content.ContentCreateClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -23,34 +36,16 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Map;
 
-import org.sakaiproject.nakamura.api.lite.ClientPoolException;
-import org.sakaiproject.nakamura.api.lite.Configuration;
-import org.sakaiproject.nakamura.api.lite.StorageClientException;
-import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
-import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
-import org.sakaiproject.nakamura.lite.ConfigurationImpl;
-import org.sakaiproject.nakamura.lite.jdbc.derby.DerbySetup;
-import org.sakaiproject.nakamura.lite.soak.AbstractSoakController;
-import org.sakaiproject.nakamura.lite.soak.content.ContentCreateClient;
-import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Maps;
-
 public class ContentCreateSoak extends AbstractSoakController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentCreateSoak.class);
     private int totalContent;
-    private StorageClientPool connectionPool;
-    private Configuration configuration;
+    private RepositoryImpl repository;
     private Map<String, Object> contentMap;
 
-    public ContentCreateSoak(int totalContent,
-            StorageClientPool connectionPool, Configuration configuration, Map<String, Object> cm) {
+    public ContentCreateSoak(int totalContent, RepositoryImpl repository, Map<String, Object> cm) {
         super(totalContent);
-        this.configuration = configuration;
-        this.connectionPool = connectionPool;
+        this.repository = repository;
         this.totalContent = totalContent;
         this.contentMap = cm;
     }
@@ -58,8 +53,7 @@ public class ContentCreateSoak extends AbstractSoakController {
     protected Runnable getRunnable(int nthreads) throws ClientPoolException,
             StorageClientException, AccessDeniedException {
         int contentPerThread = totalContent / nthreads;
-        return new ContentCreateClient(contentPerThread,
-                connectionPool, configuration, contentMap);
+        return new ContentCreateClient(contentPerThread, repository, contentMap);
     }
 
     public static void main(String[] argv) throws ClientPoolException, StorageClientException,
@@ -74,21 +68,15 @@ public class ContentCreateSoak extends AbstractSoakController {
         if (argv.length > 1) {
             totalContent = StorageClientUtils.getSetting(Integer.valueOf(argv[1]), totalContent);
         }
-        ConfigurationImpl configuration = new ConfigurationImpl();
+        
         Map<String, Object> cm = Maps.newHashMap();
         cm.put("sling:resourceType","test/resourcetype");
         cm.put("sakai:pooled-content-manager",new String[]{"a","b"});
         cm.put("sakai:type","sdfsdaggdsfgsdgsd");
         cm.put("sakai:marker","marker-marker-marker");
-        Map<String, Object> properties = Maps.newHashMap();
-        properties.put("keyspace", "n");
-        properties.put("acl-column-family", "ac");
-        properties.put("authorizable-column-family", "au");
-        properties.put("content-column-family", "cn");
-        configuration.activate(properties);
-
-        ContentCreateSoak contentCreateSoak = new ContentCreateSoak(
-                totalContent, DerbySetup.getClientPool(configuration,"jdbc:derby:target/soak/db;create=true"), configuration, cm);
+        
+        ContentCreateSoak contentCreateSoak = new ContentCreateSoak(totalContent,
+            (new BaseMemoryRepository()).getRepository(), cm);
         contentCreateSoak.launchSoak(nthreads);
         contentCreateSoak.shutdown();
         

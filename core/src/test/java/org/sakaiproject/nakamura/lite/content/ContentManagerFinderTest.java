@@ -1261,7 +1261,7 @@ public class ContentManagerFinderTest {
       String marker = (String) properties.get("sakai:marker");
       String[] category = (String[]) properties.get("sakai:category");
       if (marker != null || category != null) {
-        TestIndexDocument doc = new TestIndexDocument();
+        SampleTestIndexDocument doc = new SampleTestIndexDocument();
         doc.id = path;
         doc.marker = marker;
         doc.category = category;

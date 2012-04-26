@@ -18,33 +18,143 @@ import org.slf4j.LoggerFactory;
 public class LockManagerImpl extends CachingManagerImpl implements LockManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LockManagerImpl.class);
+    private String lockCacheName;
+    private String lockColumnFamily;
+    private String currentUser;
 
     public LockManagerImpl(StorageClient storageClient, Configuration config, User currentUser, Map<String, CacheHolder> sharedCache) {
         super(storageClient, sharedCache);
+        this.lockCacheName = config.getAuthCacheName();
+        this.lockColumnFamily = config.getLockColumnFamily();
+        this.currentUser = currentUser.getId();
     }
 
     public void close() {
     }
 
+    private Lock get(String path) throws StorageClientException {
+        Map<String, Object> lockMap = getCached(lockCacheName, lockColumnFamily, path);
+        if ( lockMap != null && lockMap.size() > 0) {
+            Lock nl =  new Lock(lockMap);
+            LOGGER.debug("Got Lock {} {} ",path, nl);
+            return nl;
+        }
+        return null;
+    }
+    
+    private void clear(String path) throws StorageClientException {
+        removeCached(lockCacheName, lockColumnFamily, path);
+    }
+
+
     public String lock(String path, long expires, String extra) throws StorageClientException, AlreadyLockedException {
-      return null;
+        String currentPath = path;
+        for(;;) {
+            Lock lock = get(currentPath);
+            if ( lock != null ) {
+                if ( !lock.hasExpired() ) {
+                    if ( !lock.isOwner(currentUser)) {
+                        throw new AlreadyLockedException(currentPath);                        
+                    }
+                } else {
+                    clear(currentPath);
+                }
+            }
+            if ( StorageClientUtils.isRoot(currentPath)) {
+                break;
+            }
+            currentPath = StorageClientUtils.getParentObjectPath(currentPath);
+        }
+        Lock newLock = new Lock(path, currentUser, expires, extra);
+        LOGGER.debug("Applying lock {} {} ",path, newLock);
+        putCached(lockCacheName, lockColumnFamily, path, newLock.getProperties() , true);
+        return newLock.getToken();
     }
     
     public String refreshLock(String path, long timeoutInSeconds, String extra, String token) throws StorageClientException {
-      return null;
+        String currentPath = path;
+        for(;;) {
+            Lock lock = get(currentPath);
+            if ( lock != null && !lock.hasExpired() ) {
+                LOGGER.debug("Lock is  not null and has not expired");
+                if ( lock.isOwner(currentUser) ) {
+                    if ( lock.hasToken(token)) {
+                        LOGGER.info("Has Owner locked with token {} {} {} {} {}", new Object[]{path, currentUser, timeoutInSeconds, extra, token});
+                        Lock newLock = new Lock(path, currentUser, timeoutInSeconds, extra, token);
+                        putCached(lockCacheName, lockColumnFamily, path, newLock.getProperties() , false);
+                        return newLock.getToken();
+                    }
+                }
+            }
+            if ( StorageClientUtils.isRoot(currentPath)) {
+                return null;
+            }
+            currentPath = StorageClientUtils.getParentObjectPath(currentPath);
+        }
     }
     
 
     public void unlock(String path, String token) throws StorageClientException {
+        String currentPath = path;
+        for(;;) {
+            Lock lock = get(currentPath);
+            if ( lock != null && !lock.hasExpired() ) {
+                if ( lock.isOwner(currentUser) && lock.hasToken(token)) {
+                    LOGGER.debug("Clearing lock at {} {} ",currentPath, lock);
+                    clear(currentPath);
+                }
+            }
+            if ( StorageClientUtils.isRoot(currentPath)) {
+                return;
+            }
+            currentPath = StorageClientUtils.getParentObjectPath(currentPath);
+        }
     }
     
     public LockState getLockState(String path, String token) throws StorageClientException {
-      return null;
+        String currentPath = path;
+        for(;;) {
+            Lock lock = get(currentPath);
+            if ( lock != null && !lock.hasExpired() ) {
+                LOGGER.debug("Lock is  not null and has not expired");
+                if ( lock.isOwner(currentUser) ) {
+                    if ( lock.hasToken(token)) {
+                        LOGGER.debug("Has Owner locked with token");
+                        return LockState.getOwnerLockedToken(currentPath, currentUser, token, lock.getExtra());
+                    } else {
+                        LOGGER.debug("Has Owner locked with not token");
+                        return LockState.getOwnerLockedNoToken(currentPath, currentUser, lock.getToken(), lock.getExtra());
+                    }
+                } else {
+                    LOGGER.debug("Has User locked");
+                    return LockState.getUserLocked(currentPath, lock.getOwner(), lock.getToken(), lock.getExtra());
+                }
+            } else {
+                LOGGER.debug("Lock is null or has expired {} ",lock);
+            }
+            if ( StorageClientUtils.isRoot(currentPath)) {
+                LOGGER.debug("Has Not locked");
+                return LockState.getNotLocked();
+            }
+            currentPath = StorageClientUtils.getParentObjectPath(currentPath);
+        }
     }
     
 
     public boolean isLocked(String path) throws StorageClientException {
-      return false;
+        String currentPath = path;
+        for(;;) {
+            Lock lock = get(currentPath);
+            if ( lock != null && !lock.hasExpired() ) {
+                LOGGER.debug("Is Locked {} {} {} ",new Object[]{path, currentPath, lock});
+                return true;
+            }
+            if ( StorageClientUtils.isRoot(currentPath)) {
+                LOGGER.debug("Is Not Locked {} ", path);
+                return false;
+            }
+            currentPath = StorageClientUtils.getParentObjectPath(currentPath);
+        }
     }
 
     @Override

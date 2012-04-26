@@ -1,7 +1,6 @@
 package org.sakaiproject.nakamura.lite.lock;
 
-import java.io.IOException;
-import java.util.Map;
+import com.google.common.collect.ImmutableMap;
 
 import junit.framework.Assert;
 
@@ -14,45 +13,32 @@ import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.api.lite.lock.AlreadyLockedException;
 import org.sakaiproject.nakamura.api.lite.lock.LockState;
-import org.sakaiproject.nakamura.lite.ConfigurationImpl;
-import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
+import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
+import java.io.IOException;
 
-public abstract class AbstractLockManagerImplTest {
+public class LockManagerImplTest {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractLockManagerImplTest.class);
-    private ConfigurationImpl configuration;
+    private static final Logger LOGGER = LoggerFactory.getLogger(LockManagerImplTest.class);
+    private RepositoryImpl repository;
+    private Configuration configuration;
     private StorageClientPool clientPool;
     private StorageClient client;
 
     @Before
     public void before() throws StorageClientException, AccessDeniedException, ClientPoolException,
             ClassNotFoundException, IOException {
-
-        Map<String, Object> properties = Maps.newHashMap();
-        properties.put("keyspace", "n");
-        properties.put("acl-column-family", "ac");
-        properties.put("authorizable-column-family", "au");
-        properties.put("content-column-family", "cn");
-        properties.put("lock-column-family", "lk");
-        configuration = new ConfigurationImpl();
-        configuration.activate(properties);
-        clientPool = getClientPool(configuration);
-        client = clientPool.getClient();
-        AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
-                configuration);
-        authorizableActivator.setup();
-        LOGGER.info("Setup Complete");
+      repository = (new BaseMemoryRepository()).getRepository();
+      configuration = repository.getConfiguration();
+      clientPool = repository.getConnectionPool();
+      client = clientPool.getClient();
+      LOGGER.info("Setup Complete");
     }
-
-    protected abstract StorageClientPool getClientPool(Configuration configuration)
-            throws ClassNotFoundException;
 
     @Test
     public void testRootLock() throws StorageClientException, AccessDeniedException,

@@ -15,41 +15,38 @@
  * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.sakaiproject.nakamura.lite.soak.derby;
+package org.sakaiproject.nakamura.lite.soak.infinispan;
+
+import com.google.common.collect.Maps;
+
+import org.sakaiproject.nakamura.api.lite.ClientPoolException;
+import org.sakaiproject.nakamura.api.lite.StorageClientException;
+import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
+import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
+import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
+import org.sakaiproject.nakamura.lite.ConfigurationImpl;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
+import org.sakaiproject.nakamura.lite.soak.AbstractSoakController;
+import org.sakaiproject.nakamura.lite.soak.authorizable.CreateUsersAndGroupsClient;
 
 import java.io.IOException;
 import java.util.Map;
 
-import org.sakaiproject.nakamura.api.lite.ClientPoolException;
-import org.sakaiproject.nakamura.api.lite.Configuration;
-import org.sakaiproject.nakamura.api.lite.StorageClientException;
-import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
-import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
-import org.sakaiproject.nakamura.lite.ConfigurationImpl;
-import org.sakaiproject.nakamura.lite.jdbc.derby.DerbySetup;
-import org.sakaiproject.nakamura.lite.soak.AbstractSoakController;
-import org.sakaiproject.nakamura.lite.soak.authorizable.CreateUsersAndGroupsClient;
-import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
-
-import com.google.common.collect.Maps;
-
 public class CreateUsersAndGroupsSoak extends AbstractSoakController {
 
     private int totalUsers;
-    private StorageClientPool connectionPool;
-    private Configuration configuration;
+    private RepositoryImpl repository;
 
-    public CreateUsersAndGroupsSoak(int totalUsers, StorageClientPool connectionPool, Configuration configuration) {
-        super(totalUsers);
-        this.configuration = configuration;
-        this.connectionPool = connectionPool;
-        this.totalUsers = totalUsers;
+    public CreateUsersAndGroupsSoak(int totalUsers, RepositoryImpl repository) {
+      super(totalUsers);
+      this.repository = repository;
+      this.totalUsers = totalUsers;
     }
 
     protected Runnable getRunnable(int nthreads) throws ClientPoolException,
             StorageClientException, AccessDeniedException {
         int usersPerThread = totalUsers / nthreads;
-        return new CreateUsersAndGroupsClient(usersPerThread, connectionPool, configuration);
+        return new CreateUsersAndGroupsClient(usersPerThread, repository);
     }
 
     public static void main(String[] argv) throws ClientPoolException, StorageClientException,
@@ -73,7 +70,7 @@ public class CreateUsersAndGroupsSoak extends AbstractSoakController {
         configuration.activate(properties);
 
         CreateUsersAndGroupsSoak createUsersAndGroupsSoak = new CreateUsersAndGroupsSoak(
-                totalUsers, DerbySetup.getClientPool(configuration,"jdbc:derby:target/soak/db;create=true"), configuration);
+            totalUsers, (new BaseMemoryRepository()).getRepository());
         createUsersAndGroupsSoak.launchSoak(nthreads);
     }
 

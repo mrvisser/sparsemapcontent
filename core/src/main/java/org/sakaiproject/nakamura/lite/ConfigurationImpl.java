@@ -45,7 +45,9 @@ public class ConfigurationImpl implements Configuration {
     protected static final String ACL_COLUMN_FAMILY = "acl-column-family";
     @Property(value = "au")
     protected static final String AUTHORIZABLE_COLUMN_FAMILY = "authorizable-column-family";
-
+    @Property(value = "l")
+    protected static final String LOCK_COLUMN_FAMILY = "lock-column-family";
+    
     protected static final String AUTH_CACHE_NAME = "AuthCache";
     
     protected static final String CONTENT_BODY_CACHE_NAME = "ContentBodyCache";
@@ -63,13 +65,11 @@ public class ConfigurationImpl implements Configuration {
 
     private String aclColumnFamily;
     private String authorizableColumnFamily;
+    private String lockColumnFamily;
     private Map<String, String> sharedProperties;
 
     @Activate
     public void activate(Map<String, Object> properties) throws IOException {
-        aclColumnFamily = StorageClientUtils.getSetting(properties.get(ACL_COLUMN_FAMILY), "ac");
-        authorizableColumnFamily = StorageClientUtils.getSetting(properties.get(AUTHORIZABLE_COLUMN_FAMILY), "au");
-        
         // load defaults
         // check the classpath
         sharedProperties = Maps.newHashMap();
@@ -80,6 +80,7 @@ public class ConfigurationImpl implements Configuration {
             in.close();
             sharedProperties.putAll(Maps.fromProperties(p));
         }
+        
         // Load from a properties file defiend on the command line
         String osSharedConfigPath = System.getProperty(SHAREDCONFIGPROPERTY);
         if ( osSharedConfigPath != null && StringUtils.isNotEmpty(osSharedConfigPath)) {
@@ -98,6 +99,21 @@ public class ConfigurationImpl implements Configuration {
         // make the shared properties immutable.
         sharedProperties = ImmutableMap.copyOf(sharedProperties);
         
+        // shared properties are overridden by OSGi properties, so we set them first.
+        aclColumnFamily = StorageClientUtils.getSetting(sharedProperties.get(ACL_COLUMN_FAMILY),
+            "ac");
+        authorizableColumnFamily = StorageClientUtils.getSetting(sharedProperties.get(
+            AUTHORIZABLE_COLUMN_FAMILY), "au");
+        lockColumnFamily = StorageClientUtils.getSetting(sharedProperties.get(LOCK_COLUMN_FAMILY),
+            "ln");
+        
+        // push the OSGi properties into the column family definitions, if populated.
+        aclColumnFamily = StorageClientUtils.getSetting(properties.get(ACL_COLUMN_FAMILY),
+            aclColumnFamily);
+        authorizableColumnFamily = StorageClientUtils.getSetting(properties.get(
+            AUTHORIZABLE_COLUMN_FAMILY), authorizableColumnFamily);
+        lockColumnFamily = StorageClientUtils.getSetting(properties.get(LOCK_COLUMN_FAMILY),
+            lockColumnFamily);
     }
 
     public String getAclColumnFamily() {
@@ -106,6 +122,10 @@ public class ConfigurationImpl implements Configuration {
 
     public String getAuthorizableColumnFamily() {
         return authorizableColumnFamily;
+    }
+    
+    public String getLockColumnFamily() {
+      return lockColumnFamily;
     }
 
     public Map<String, String> getSharedConfig() {

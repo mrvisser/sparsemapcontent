@@ -15,7 +15,7 @@
 	<description>Server that uses a sparse map to represent content mapping closely to a colum database like Cassandra.</description>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<maven.test.redirectTestOutputToFile>true</maven.test.redirectTestOutputToFile>
+		<maven.test.redirectTestOutputToFile>false</maven.test.redirectTestOutputToFile>
 	</properties>
 	<scm>
 		<connection>scm:git:git://github.com/sakaiproject/sparsemapcontent.git</connection>

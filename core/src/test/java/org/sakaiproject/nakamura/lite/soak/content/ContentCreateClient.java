@@ -1,17 +1,14 @@
 package org.sakaiproject.nakamura.lite.soak.content;
 
-import java.util.Iterator;
-import java.util.Map;
-
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
-import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorResolver;
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AccessControlManagerImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.PrincipalValidatorResolverImpl;
@@ -19,9 +16,11 @@ import org.sakaiproject.nakamura.lite.authorizable.AuthorizableManagerImpl;
 import org.sakaiproject.nakamura.lite.content.ContentManagerImpl;
 import org.sakaiproject.nakamura.lite.soak.AbstractScalingClient;
 import org.sakaiproject.nakamura.lite.storage.spi.ConcurrentLRUMap;
-import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Iterator;
+import java.util.Map;
 
 public class ContentCreateClient extends AbstractScalingClient {
 
@@ -31,10 +30,10 @@ public class ContentCreateClient extends AbstractScalingClient {
     private int totalContentItems;
     private Map<String, Object> propertyMap;
 
-    public ContentCreateClient(int totalContentItems, StorageClientPool clientPool,
-            Configuration configuration, Map<String, Object> propertyMap)
-            throws ClientPoolException, StorageClientException, AccessDeniedException {
-        super(clientPool, configuration);
+    public ContentCreateClient(int totalContentItems, RepositoryImpl repository,
+      Map<String, Object> propertyMap) throws ClientPoolException, StorageClientException,
+      AccessDeniedException {
+        super(repository);
         this.propertyMap = propertyMap;
         this.totalContentItems = totalContentItems;
     }
@@ -55,7 +54,7 @@ public class ContentCreateClient extends AbstractScalingClient {
                     null, client, configuration, accessControlManagerImpl, sharedCache,
                     new LoggingStorageListener());
 
-            ContentManagerImpl contentManagerImpl = new ContentManagerImpl(client,
+            ContentManagerImpl contentManagerImpl = new ContentManagerImpl(fs, client,
                     accessControlManagerImpl, configuration, sharedCache,
                     new LoggingStorageListener(true));
 

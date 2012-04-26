@@ -17,10 +17,12 @@
  */
 package org.sakaiproject.nakamura.lite.soak;
 
+import org.infinispan.io.GridFilesystem;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
@@ -34,14 +36,18 @@ import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
  */
 public abstract class AbstractScalingClient implements Runnable {
 
+    protected RepositoryImpl repository;
+    protected GridFilesystem fs;
     protected StorageClientPool clientPool;
     protected StorageClient client;
     protected Configuration configuration;
 
-    public AbstractScalingClient(StorageClientPool clientPool, Configuration configuration) throws ClientPoolException,
+    public AbstractScalingClient(RepositoryImpl repository) throws ClientPoolException,
             StorageClientException, AccessDeniedException {
-        this.clientPool = clientPool;
-        this.configuration = configuration;
+      this.repository = repository;
+      this.fs = repository.getGridFilesystem();
+      this.clientPool = repository.getConnectionPool();
+      this.configuration = repository.getConfiguration();
     }
 
     public void setup() throws ClientPoolException, StorageClientException, AccessDeniedException {

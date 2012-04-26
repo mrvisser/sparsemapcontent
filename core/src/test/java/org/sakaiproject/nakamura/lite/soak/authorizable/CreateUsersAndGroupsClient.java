@@ -21,20 +21,19 @@ import com.google.common.collect.ImmutableMap;
 
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
-import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorResolver;
 import org.sakaiproject.nakamura.api.lite.authorizable.Authorizable;
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AccessControlManagerImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.accesscontrol.PrincipalValidatorResolverImpl;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableManagerImpl;
 import org.sakaiproject.nakamura.lite.soak.AbstractScalingClient;
 import org.sakaiproject.nakamura.lite.storage.spi.ConcurrentLRUMap;
-import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
 
 import java.util.Map;
 
@@ -44,9 +43,9 @@ public class CreateUsersAndGroupsClient extends AbstractScalingClient {
     private Map<String, CacheHolder> sharedCache = new ConcurrentLRUMap<String, CacheHolder>(1000);
     private PrincipalValidatorResolver principalValidatorResolver = new PrincipalValidatorResolverImpl();
 
-    public CreateUsersAndGroupsClient(int totalUsers, StorageClientPool clientPool, Configuration configuration)
+    public CreateUsersAndGroupsClient(int totalUsers, RepositoryImpl repository)
             throws ClientPoolException, StorageClientException, AccessDeniedException {
-        super(clientPool, configuration);
+        super(repository);
         nusers = totalUsers;
     }
 

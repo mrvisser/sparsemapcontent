@@ -68,9 +68,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-public class AbstractAccessControlManagerImplTest {
+public class AccessControlManagerImplTest {
     private static final Logger LOGGER = LoggerFactory
-            .getLogger(AbstractAccessControlManagerImplTest.class);
+            .getLogger(AccessControlManagerImplTest.class);
     private RepositoryImpl repository;
     private StorageClient client;
     private Configuration configuration;

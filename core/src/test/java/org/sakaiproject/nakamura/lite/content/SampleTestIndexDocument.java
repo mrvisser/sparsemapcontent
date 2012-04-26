@@ -34,7 +34,7 @@ import org.sakaiproject.nakamura.api.lite.IndexDocument;
 @Indexed(index="oae")
 @ProvidedId
 @Analyzer(impl=KeywordAnalyzer.class)
-public class TestIndexDocument implements IndexDocument {
+public class SampleTestIndexDocument implements IndexDocument {
   private static final long serialVersionUID = 6667650051279739243L;
 
   @Field(index=Index.NO,store=Store.YES)
