@@ -38,7 +38,7 @@ public class StreamFileFilter implements FileFilter {
    * @see java.io.FileFilter#accept(java.io.File)
    */
   public boolean accept(File pathname) {
-    return pathname.isFile() && pathname.getName().startsWith(streamNamePrefix);
+    return !pathname.isDirectory() && pathname.getName().startsWith(streamNamePrefix);
   }
   
   /**

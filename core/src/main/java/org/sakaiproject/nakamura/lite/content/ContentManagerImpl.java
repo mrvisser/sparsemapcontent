@@ -377,6 +377,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         }
 
         Map<String, Object> originalProperties = ImmutableMap.of();
+        // only admin can bypass the lastModified fields using withTouch=false
         boolean touch = withTouch || !User.ADMIN_USER.equals(accessControlManager.getCurrentUserId());
         boolean isnew = false;
         
@@ -395,31 +396,29 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
                 root.mkdir();
             }
             toSave =  Maps.newHashMap(content.getPropertiesForUpdate());
-            // if the user is admin we allow overwriting of protected fields. This should allow content migration.
-            toSave.put(CREATED_FIELD,
-                    touch ? System.currentTimeMillis() : content.getProperty(CREATED_FIELD));
-            toSave.put(CREATED_BY_FIELD,
-                    touch ? accessControlManager.getCurrentUserId() : content.getProperty(CREATED_BY_FIELD));
-            toSave.put(LASTMODIFIED_FIELD,
-                    touch ? System.currentTimeMillis() : content.getProperty(LASTMODIFIED_FIELD));
-            toSave.put(LASTMODIFIED_BY_FIELD,
-                    touch? accessControlManager.getCurrentUserId() : content.getProperty(LASTMODIFIED_BY_FIELD));
+            
+            if (touch) {
+              // if the user is admin we allow overwriting of protected fields. This should allow content migration.
+              toSave.put(CREATED_FIELD, System.currentTimeMillis());
+              toSave.put(CREATED_BY_FIELD, accessControlManager.getCurrentUserId());
+              toSave.put(LASTMODIFIED_FIELD, System.currentTimeMillis());
+              toSave.put(LASTMODIFIED_BY_FIELD, accessControlManager.getCurrentUserId());
+            }
+            
             toSave.put(DELETED_FIELD, new RemoveProperty()); // make certain the deleted field is not set
             LOGGER.debug("New Content with {} {} ", path, toSave);
         } else if (content.isUpdated()) {
-            originalProperties = content.getOriginalProperties();
-            toSave =  Maps.newHashMap(content.getPropertiesForUpdate());
+          originalProperties = content.getOriginalProperties();
+          toSave =  Maps.newHashMap(content.getPropertiesForUpdate());
 
-
-          // only admin can bypass the lastModified fields using withTouch=false
           if (touch) {
             for (String field : PROTECTED_FIELDS) {
               LOGGER.debug("Resetting value for {} to {}", field, originalProperties.get(field));
               toSave.put(field, originalProperties.get(field));
             }
+            
             toSave.put(LASTMODIFIED_FIELD, System.currentTimeMillis());
-            toSave.put(LASTMODIFIED_BY_FIELD,
-                    accessControlManager.getCurrentUserId());
+            toSave.put(LASTMODIFIED_BY_FIELD, accessControlManager.getCurrentUserId());
             toSave.put(DELETED_FIELD, new RemoveProperty()); // make certain the deleted field is not set
           }
           LOGGER.debug("Updating Content with {} {} ", path, toSave);
