@@ -97,6 +97,8 @@ public class StorageClientUtilsTest {
         Assert.assertEquals("/", StorageClientUtils.getParentObjectPath("/test/"));
         Assert.assertEquals("/test", StorageClientUtils.getParentObjectPath("/test/ing"));
         Assert.assertEquals("/test", StorageClientUtils.getParentObjectPath("/test/ing/"));
+        Assert.assertEquals("http:/", StorageClientUtils.getParentObjectPath("http://localhost"));
+        Assert.assertEquals("http:", StorageClientUtils.getParentObjectPath("http://"));
     }
 
     @Test

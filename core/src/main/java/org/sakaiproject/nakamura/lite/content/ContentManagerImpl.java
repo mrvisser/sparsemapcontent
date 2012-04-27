@@ -44,6 +44,7 @@ import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.IndexDocument;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
+import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
 import org.sakaiproject.nakamura.api.lite.StoreListener;
@@ -444,6 +445,61 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         content.reset(getFileProperties(path));
         
         eventListener.onUpdate(Security.ZONE_CONTENT, path, accessControlManager.getCurrentUserId(), getResourceType(content),  isnew, originalProperties, "op:update");
+    }
+    
+    /**
+     * {@inheritDoc}
+     *
+     * @see org.sakaiproject.nakamura.api.lite.content.ContentManager#replace(org.sakaiproject.nakamura.api.lite.content.Content)
+     */
+    // TODO unit test
+    public void replace(Content content) throws AccessDeniedException,
+        StorageClientException {
+      replace(content, true);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @see org.sakaiproject.nakamura.api.lite.content.ContentManager#replace(org.sakaiproject.nakamura.api.lite.content.Content, boolean)
+     */
+    // TODO unit test
+    public void replace(Content content, boolean withTouch)
+        throws AccessDeniedException, StorageClientException {
+      Content current = get(content.getPath());
+      if (current != null) {
+        Set<String> diffKeys = diffKeys(current.getProperties(), content.getProperties());
+        for (String diffKey : diffKeys) {
+          content.setProperty(diffKey, new RemoveProperty());
+        }
+      }
+      update(content, withTouch);
+    }
+
+    /**
+     * Set the keys in <code>update</code> to <code>new RemoveProperty()</code> if they are
+     * in <code>current</code> but not in <code>update</code>. System properties are ignored
+     * which is the only difference to {@link StorageClientUtils#diffKeys(Map, Map)}.
+     *
+     * @param current
+     *          The current content found at the location.
+     * @param update
+     *          The content that will be used to update the location.
+     * @return Set of keys to remove from <code>update</code>.
+     */
+    private Set<String> diffKeys(Map<String, Object> current, Map<String, Object> update) {
+      Set<String> diffKeys = StorageClientUtils.diffKeys(current, update);
+      if (diffKeys.size() > 0) {
+        // remove system properties
+        Iterator<String> keysIter = diffKeys.iterator();
+        while (keysIter.hasNext()) {
+          String diffKey = keysIter.next();
+          if (diffKey.startsWith(Repository.SYSTEM_PROP_PREFIX)) {
+            keysIter.remove();
+          }
+        }
+      }
+      return diffKeys;
     }
 
     public void delete(String path) throws AccessDeniedException, StorageClientException {

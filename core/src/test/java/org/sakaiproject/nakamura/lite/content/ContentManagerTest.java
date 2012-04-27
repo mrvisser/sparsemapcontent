@@ -131,6 +131,70 @@ public class ContentManagerTest {
     }
 
     @Test
+    public void testCreateContentWithNewChild() throws StorageClientException, AccessDeniedException {
+        AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, sharedCache);
+        User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
+
+        AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
+                currentUser, configuration, sharedCache,  new LoggingStorageListener(), principalValidatorResolver);
+
+        ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+                configuration, null, new LoggingStorageListener());
+        String testId = "/testCreateContentWithNewChild"+System.nanoTime();
+        contentManager.update(new Content(testId, ImmutableMap.of("prop1", (Object) "value1")));
+        contentManager.update(new Content(testId+"/test", ImmutableMap.of("prop1", (Object) "value2")));
+        contentManager
+                .update(new Content(testId+"/test/ing", ImmutableMap.of("prop1", (Object) "value3")));
+
+        Content content = contentManager.get(testId);
+        Assert.assertEquals(testId, content.getPath());
+        Map<String, Object> p = content.getProperties();
+        LOGGER.info("Properties is {}",p);
+        Assert.assertEquals("value1", (String)p.get("prop1"));
+        Iterator<Content> children = content.listChildren().iterator();
+        Assert.assertTrue(children.hasNext());
+        Content child = children.next();
+        Assert.assertFalse(children.hasNext());
+        Assert.assertEquals(testId+"/test", child.getPath());
+        p = child.getProperties();
+        Assert.assertEquals("value2", (String)p.get("prop1"));
+        children = child.listChildren().iterator();
+        Assert.assertTrue(children.hasNext());
+        child = children.next();
+        Assert.assertFalse(children.hasNext());
+        Assert.assertEquals(testId+"/test/ing", child.getPath());
+        p = child.getProperties();
+        Assert.assertEquals("value3", (String)p.get("prop1"));
+
+        Content testChild = contentManager.get(testId+"/test");
+        Set<String> childPaths = Sets.newHashSet();
+        children = testChild.listChildren().iterator();
+        while ( children.hasNext() ) {
+            child = children.next();
+            Assert.assertNotNull(child);
+            childPaths.add(child.getPath());
+        }
+        Assert.assertEquals(1, childPaths.size());
+        Assert.assertTrue(childPaths.contains(testId+"/test/ing"));
+        childPaths.clear();
+
+        contentManager
+        .update(new Content(testId+"/test/newchild", ImmutableMap.of("prop1", (Object) "value3")));
+        children = testChild.listChildren().iterator();
+        while ( children.hasNext() ) {
+            child = children.next();
+            Assert.assertNotNull(child);
+            childPaths.add(child.getPath());
+        }
+        Assert.assertEquals(2, childPaths.size());
+        Assert.assertTrue(childPaths.contains(testId+"/test/newchild"));
+        Assert.assertTrue(childPaths.contains(testId+"/test/ing"));
+        
+        
+        
+    }
+
+    @Test
     public void testCreateContent2() throws StorageClientException, AccessDeniedException {
         AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
         User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
@@ -882,7 +946,7 @@ public class ContentManagerTest {
 
     // add some initial content
     adminContentManager.update(new Content(from, ImmutableMap.<String, Object>of("prop1", "value1")));
-    adminContentManager.update(new Content(to, ImmutableMap.<String, Object>of("prop1", "value1")));
+    adminContentManager.update(new Content(to, ImmutableMap.<String, Object>of("prop2", "value2")));
 
     // save a version of the content and verify the history
     adminContentManager.saveVersion(from);
@@ -899,7 +963,13 @@ public class ContentManagerTest {
     adminContentManager.move(from, to, true);
 
     // check the base content is there
+    Assert.assertFalse(adminContentManager.exists(from));
     Assert.assertTrue(adminContentManager.exists(to));
+
+    // ensure we don't have properties from the previous content version
+    Content movedTo = adminContentManager.get(to);
+    Assert.assertNull(movedTo.getProperty("prop2"));
+    Assert.assertEquals("value1", movedTo.getProperty("prop1"));
 
     // check the history
     history = adminContentManager.getVersionHistory(to);
@@ -917,7 +987,7 @@ public class ContentManagerTest {
 
     // add some initial content
     adminContentManager.update(new Content(from, ImmutableMap.<String, Object>of("prop1", "value1")));
-    adminContentManager.update(new Content(to, ImmutableMap.<String, Object>of("prop1", "value1")));
+    adminContentManager.update(new Content(to, ImmutableMap.<String, Object>of("prop2", "value2")));
 
     // save a version of the content and verify the history
     adminContentManager.saveVersion(from);
@@ -935,6 +1005,11 @@ public class ContentManagerTest {
 
     // check the base content is there
     Assert.assertTrue(adminContentManager.exists(to));
+
+    // ensure we don't have properties from the previous content version
+    Content movedTo = adminContentManager.get(to);
+    Assert.assertNull(movedTo.getProperty("prop2"));
+    Assert.assertEquals("value1", movedTo.getProperty("prop1"));
 
     // check the history
     history = adminContentManager.getVersionHistory(to);
