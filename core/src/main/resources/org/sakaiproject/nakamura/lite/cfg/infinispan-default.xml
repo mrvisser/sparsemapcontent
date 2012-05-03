@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<infinispan xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xsi:schemaLocation="urn:infinispan:config:5.2 http://www.infinispan.org/schemas/infinispan-config-5.1.xsd"
+		xmlns="urn:infinispan:config:5.1">
+	<global>
+		<globalJmxStatistics enabled="true" />
+	</global>
+
+	<namedCache name="AuthCache">
+		<!-- Index that holds ACL entries and Authorizables -->
+	</namedCache>
+
+	<namedCache name="ContentMetadataCache">
+		<!-- Cache that holds the GridFS java.io.File.Metadata information -->
+		<storeAsBinary enabled="true" />
+	</namedCache>
+	
+	<namedCache name="ContentBodyCache">
+		<!-- Cache that holds the GridFS java.io.File binary bodies -->
+		<storeAsBinary enabled="true" />
+	</namedCache>
+	
+	<namedCache name="IndexCache">
+		<!-- Cache that holds all the indexed IndexDocuments -->
+	</namedCache>
+	
+	<namedCache name="IndexCacheDirectory">
+		<!-- Cache that holds the lucene index binary data itself (unused right now?) -->
+	</namedCache>
+	
+</infinispan>

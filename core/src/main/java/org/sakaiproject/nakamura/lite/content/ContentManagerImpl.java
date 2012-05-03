@@ -65,6 +65,7 @@ import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
@@ -604,7 +605,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         String streamPath = StorageClientUtils.newPath(path, getStreamFileNameByStreamId(streamId));
         File streamFile = getFileFromContentPath(streamPath);
         if (!streamFile.exists())
-        	return null;
+        	return new ByteArrayInputStream(new byte[0]);
         return fs.getInput(streamFile);
     }
 

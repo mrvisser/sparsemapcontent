@@ -23,6 +23,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.Session;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
@@ -75,6 +76,14 @@ public class RepositoryImplTest {
         Assert.assertNotNull(session.getContentManager());
         session.logout();
 
+    }
+    
+    @Test
+    public void testBlah() {
+      Object obj = new Object();
+      obj = Mockito.spy(obj);
+      Mockito.when(obj.toString()).thenReturn("my to string!");
+      Assert.assertEquals("my to string!", obj.toString());
     }
 
 }
