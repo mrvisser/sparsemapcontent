@@ -24,6 +24,7 @@ import static org.sakaiproject.nakamura.lite.content.InternalContent.CREATED_FIE
 import static org.sakaiproject.nakamura.lite.content.InternalContent.DELETED_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.LASTMODIFIED_BY_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.LASTMODIFIED_FIELD;
+import static org.sakaiproject.nakamura.lite.content.InternalContent.PATH_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.READONLY_FIELD;
 import static org.sakaiproject.nakamura.lite.content.InternalContent.TRUE;
 
@@ -61,10 +62,12 @@ import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.api.lite.content.ContentManager;
 import org.sakaiproject.nakamura.api.lite.util.PreemptiveIterator;
 import org.sakaiproject.nakamura.lite.CachingManagerImpl;
+import org.sakaiproject.nakamura.lite.content.io.GridFileInputStreamWrapper;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileFilter;
@@ -74,6 +77,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -146,11 +150,9 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentManagerImpl.class);
 
+  private static final Set<String> PROTECTED_FIELDS = ImmutableSet.of(PATH_FIELD,
+      LASTMODIFIED_FIELD, LASTMODIFIED_BY_FIELD);
 
-    private static final Set<String> PROTECTED_FIELDS = ImmutableSet.of(LASTMODIFIED_FIELD,
-                                                                        LASTMODIFIED_BY_FIELD);
-    
-    
     // These properties copied from AccessControlManager to keep from binding
     // directly to the implementation class. They should stay in sync.
     private static final String _SECRET_KEY = "_secretKey";
@@ -437,6 +439,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         }
 
         // persist the properties to the file-store
+        toSave.put(PATH_FIELD, path);
         putProperties(path, toSave);
         
         LOGGER.debug("Saved {} as {} ", new Object[] { path, toSave });
@@ -543,6 +546,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
           deleteInternal(child, keepHistory);
         }
         
+        LOGGER.info("Deleting path: {}", path);
+        
         Content content = get(path);
         Map<String, Object> contentBeforeDelete = content.getProperties();
         String resourceType = (String) contentBeforeDelete.get("sling:resourceType");
@@ -606,7 +611,9 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         File streamFile = getFileFromContentPath(streamPath);
         if (!streamFile.exists())
         	return new ByteArrayInputStream(new byte[0]);
-        return fs.getInput(streamFile);
+        
+        return new BufferedInputStream(new GridFileInputStreamWrapper(
+            fs.getInput(streamFile)));
     }
 
     public void close() {
@@ -792,9 +799,14 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         String nextVersionDirName = StorageClientUtils.newPath(path,
         		getVersionFileNameByVersionNumber(nextVersionNumber));
         
+        
+        File nextVersionDir = getFileFromContentPath(nextVersionDirName);
+        nextVersionDir.mkdir();
+        
         // simply copy into the next version node
         try {
-        	copyInternal(path, nextVersionDirName, true);
+          replaceProperties(path, nextVersionDirName);
+          replaceStreams(path, nextVersionDirName);
         } catch (IOException e) {
         	throw new StorageClientException("Error trying to store content version.", e);
         }
@@ -811,7 +823,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         
         // make version read-only
         savedVersion.setProperty(READONLY_FIELD, TRUE);
-        update(savedVersion);
+        putProperties(savedVersion.getPath(), savedVersion.getProperties());
         
         return nextVersionNumber;
     }
@@ -1120,6 +1132,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       	pin = new ObjectInputStream(fs.getInput(propertiesFile));
       	@SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) pin.readObject();
+      	
       	return result;
       } catch (IOException e) {
       	LOGGER.warn("Received exception trying to load file properties.", e);
@@ -1134,10 +1147,15 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     private void putProperties(String path, Map<String, Object> toSave)
         throws StorageClientException, AccessDeniedException {
       
+      // ensure the map is write-able, because we aren't done updating yet
+      toSave = new HashMap<String, Object>(toSave);
+      
       // ensure explicitly deleted entries are deleted
       Set<String> toRemove = new HashSet<String>();
       for (Map.Entry<String, Object> entry : toSave.entrySet()) {
         if (entry.getValue() instanceof RemoveProperty) {
+          toRemove.add(entry.getKey());
+        } else if (entry.getValue() == null) {
           toRemove.add(entry.getKey());
         }
       }
@@ -1145,6 +1163,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       for (String key : toRemove) {
         toSave.remove(key);
       }
+      
+      toSave.put(PATH_FIELD, path);
       
         try {
           

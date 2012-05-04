@@ -17,6 +17,7 @@ import org.sakaiproject.nakamura.api.lite.IndexDocumentFactory;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.content.Content;
+import org.sakaiproject.nakamura.lite.ClassLoaderHelper;
 import org.sakaiproject.nakamura.lite.storage.spi.DisposableIterator;
 import org.sakaiproject.nakamura.lite.storage.spi.Disposer;
 import org.sakaiproject.nakamura.lite.storage.spi.SparseMapRow;
@@ -71,6 +72,8 @@ public class InfinispanStorageClient implements StorageClient {
 			String columnName = entry.getKey();
 			if (entry.getValue() instanceof RemoveProperty) {
 				mutableValues.remove(columnName);
+			} else if (entry.getValue() == null) {
+			  mutableValues.remove(columnName);
 			} else {
 				mutableValues.put(columnName, entry.getValue());
 			}
@@ -157,9 +160,14 @@ public class InfinispanStorageClient implements StorageClient {
 	public void removeIndex(String key, Map<String, Object> values) throws StorageClientException {
 	  List<IndexDocument> documents = getIndexedDocuments(key, values);
 	  if (documents != null) {
-	    for (IndexDocument document : documents) {
-	      String docKey = getDocKey(document);
-	      indexCache.remove(docKey);
+	    ClassLoader prev = ClassLoaderHelper.swapContext(getClass().getClassLoader());
+	    try {
+  	    for (IndexDocument document : documents) {
+  	      String docKey = getDocKey(document);
+  	      indexCache.remove(docKey);
+  	    }
+	    } finally {
+	      ClassLoaderHelper.swapContext(prev);
 	    }
 	  }
 	}
@@ -167,9 +175,15 @@ public class InfinispanStorageClient implements StorageClient {
   public void updateIndex(String key, Map<String, Object> values) throws StorageClientException {
     List<IndexDocument> documents = getIndexedDocuments(key, values);
     if (documents != null) {
-      for (IndexDocument document : documents) {
-        // namespace the key by the document class to avoid collisions with other indexed documents
-        indexCache.put(getDocKey(document), document);
+      // we need to set the bundle class loader to the thread context, to work with JNDI/Hibernate
+      ClassLoader prev = ClassLoaderHelper.swapContext(getClass().getClassLoader());
+      try {
+        for (IndexDocument document : documents) {
+          // namespace the key by the document class to avoid collisions with other indexed documents
+          indexCache.put(getDocKey(document), document);
+        }
+      } finally {
+        ClassLoaderHelper.swapContext(prev);
       }
     }
   }

@@ -3,29 +3,185 @@
 		xsi:schemaLocation="urn:infinispan:config:5.2 http://www.infinispan.org/schemas/infinispan-config-5.1.xsd"
 		xmlns="urn:infinispan:config:5.1">
 	<global>
-		<globalJmxStatistics enabled="true" />
+		<globalJmxStatistics enabled="false" />
 	</global>
 
 	<namedCache name="AuthCache">
-		<!-- Index that holds ACL entries and Authorizables -->
+		<loaders shared="false">
+         <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
+          		purgeOnStartup="false">
+            <properties>
+               <property name="driverClass" value="com.mysql.jdbc.Driver" />
+               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
+               <property name="userName" value="infinispan" />
+               <property name="password" value="infinispan" />
+               <!-- pooling -->
+               <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
+               
+               <!-- table management -->
+               <property name="dropTableOnExit" value="false" />
+               <property name="createTableOnStart" value="true" />
+               <property name="cacheName" value="auth" />
+               <property name="idColumnName" value="id" />
+               <property name="idColumnType" value="varchar(255)" />
+               <property name="dataColumnName" value="data" />
+               <property name="dataColumnType" value="blob" />
+               <property name="timestampColumnName" value="updated" />
+               <property name="timestampColumnType" value="bigint" />
+               <property name="stringsTableNamePrefix" value="str" />
+               
+            </properties>
+         </loader>
+      </loaders>
+      <eviction maxEntries="10000" strategy="LIRS" />
 	</namedCache>
 
 	<namedCache name="ContentMetadataCache">
 		<!-- Cache that holds the GridFS java.io.File.Metadata information -->
-		<storeAsBinary enabled="true" />
+		<!-- MUST be a replicated cache, and CANNOT have eviction! -->
+		<loaders shared="false" preload="true">
+         <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
+          		purgeOnStartup="false">
+            <properties>
+               <property name="driverClass" value="com.mysql.jdbc.Driver" />
+               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
+               <property name="userName" value="infinispan" />
+               <property name="password" value="infinispan" />
+               <!-- pooling -->
+               <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
+               
+               <!-- table management -->
+               <property name="dropTableOnExit" value="false" />
+               <property name="createTableOnStart" value="true" />
+               <property name="cacheName" value="content_metadata" />
+               <property name="idColumnName" value="id" />
+               <property name="idColumnType" value="varchar(255)" />
+               <property name="dataColumnName" value="data" />
+               <property name="dataColumnType" value="blob" />
+               <property name="timestampColumnName" value="updated" />
+               <property name="timestampColumnType" value="bigint" />
+               <property name="stringsTableNamePrefix" value="str" />
+            </properties>
+         </loader>
+      </loaders>
 	</namedCache>
 	
 	<namedCache name="ContentBodyCache">
 		<!-- Cache that holds the GridFS java.io.File binary bodies -->
-		<storeAsBinary enabled="true" />
+		<loaders shared="false">
+         <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
+          		purgeOnStartup="false">
+            <properties>
+               <property name="driverClass" value="com.mysql.jdbc.Driver" />
+               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
+               <property name="userName" value="infinispan" />
+               <property name="password" value="infinispan" />
+               <!-- pooling -->
+               <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
+               
+               <!-- table management -->
+               <property name="dropTableOnExit" value="false" />
+               <property name="createTableOnStart" value="true" />
+               <property name="cacheName" value="content_body" />
+               <property name="idColumnName" value="id" />
+               <property name="idColumnType" value="varchar(255)" />
+               <property name="dataColumnName" value="data" />
+               <property name="dataColumnType" value="blob" />
+               <property name="timestampColumnName" value="updated" />
+               <property name="timestampColumnType" value="bigint" />
+               <property name="stringsTableNamePrefix" value="str" />
+               
+            </properties>
+         </loader>
+      </loaders>
+      <eviction maxEntries="1000" strategy="LIRS" />
 	</namedCache>
 	
 	<namedCache name="IndexCache">
 		<!-- Cache that holds all the indexed IndexDocuments -->
+		
+		<!-- Indexing configuration -->
+		<indexing enabled="true" indexLocalOnly="true">
+			<properties>
+				<property name="hibernate.search.default.directory_provider" value="infinispan" />
+				<!--
+					TODO: These shouldn't all be the same cache, should store meta/locks in a replicated cache
+					and data in a distributed cache.
+				-->
+				<property name="hibernate.search.default.data_cachename" value="IndexCacheDirectory" />
+				<property name="hibernate.search.default.metadata_cachename" value="IndexCacheDirectory" />
+				<property name="hibernate.search.default.locking_cachename" value="IndexCacheDirectory" />
+			</properties>
+		</indexing>
+		
+		<loaders shared="false">
+         <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
+          		purgeOnStartup="false">
+            <properties>
+               <property name="driverClass" value="com.mysql.jdbc.Driver" />
+               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
+               <property name="userName" value="infinispan" />
+               <property name="password" value="infinispan" />
+               <!-- pooling -->
+               <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
+               
+               <!-- table management -->
+               <property name="dropTableOnExit" value="false" />
+               <property name="createTableOnStart" value="true" />
+               <property name="cacheName" value="ix" />
+               <property name="idColumnName" value="id" />
+               <property name="idColumnType" value="varchar(255)" />
+               <property name="dataColumnName" value="data" />
+               <property name="dataColumnType" value="blob" />
+               <property name="timestampColumnName" value="updated" />
+               <property name="timestampColumnType" value="bigint" />
+               <property name="stringsTableNamePrefix" value="str" />
+            </properties>
+         </loader>
+      </loaders>
+      <eviction maxEntries="100" strategy="UNORDERED" />
 	</namedCache>
 	
 	<namedCache name="IndexCacheDirectory">
-		<!-- Cache that holds the lucene index binary data itself (unused right now?) -->
+		<!-- Cache that holds the lucene index binary data -->
+		<loaders shared="false">
+         <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" ignoreModifications="false">
+            <properties>
+               <property name="driverClass" value="com.mysql.jdbc.Driver" />
+               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
+               <property name="userName" value="infinispan" />
+               <property name="password" value="infinispan" />
+               <!-- pooling -->
+               <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
+               
+               <!-- Key2String mapper -->
+               <property name="key2StringMapperClass" value="org.infinispan.lucene.LuceneKey2StringMapper" />
+               
+               <!-- table management -->
+               <property name="dropTableOnExit" value="false" />
+               <property name="createTableOnStart" value="true" />
+               <property name="cacheName" value="lucene" />
+               <property name="idColumnName" value="id" />
+               <property name="idColumnType" value="varchar(255)" />
+               <property name="dataColumnName" value="data" />
+               <property name="dataColumnType" value="blob" />
+               <property name="timestampColumnName" value="updated" />
+               <property name="timestampColumnType" value="bigint" />
+               <property name="stringsTableNamePrefix" value="str" />
+               
+            </properties>
+         </loader>
+      </loaders>
+      
+      <eviction maxEntries="100" strategy="UNORDERED" />
+      
+      <!--
+      	Transactions I guess are required for the lucene index directory module. I think in 5.2, or 5.1.4
+      	maybe transactions are optional.
+      -->
+      <invocationBatching enabled="true" />
+	  <transaction transactionManagerLookupClass="org.infinispan.transaction.lookup.GenericTransactionManagerLookup"
+      		transactionMode="TRANSACTIONAL" lockingMode="OPTIMISTIC"/>
 	</namedCache>
 	
 </infinispan>

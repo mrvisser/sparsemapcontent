@@ -17,6 +17,7 @@
  */
 package org.sakaiproject.nakamura.lite;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 import org.apache.commons.lang.StringUtils;
@@ -51,6 +52,7 @@ import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.lite.accesscontrol.AuthenticatorImpl;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableIndexDocumentFactory;
+import org.sakaiproject.nakamura.lite.jndi.DummyJndiContextFactory;
 import org.sakaiproject.nakamura.lite.storage.infinispan.InfinispanStorageClientPool;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClientPool;
@@ -62,19 +64,28 @@ import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 
 @Component(immediate = true, metatype = true)
 @Service(value = Repository.class)
 public class RepositoryImpl implements Repository {
   
     private static final Logger LOGGER = LoggerFactory.getLogger(RepositoryImpl.class);
-
+    
     private static final Collection<IndexDocumentFactory> INDEXED_DOCUMENTS_INTERNAL =
         ImmutableSet.<IndexDocumentFactory>of(new AuthorizableIndexDocumentFactory());
 
+    private static final String JNDI_CACHE_NAME = "sakai/oae/cacheContainer";
+    private static final Hashtable<String, String> JNDI_ENV = new Hashtable<String, String>(
+        ImmutableMap.<String, String>of(Context.INITIAL_CONTEXT_FACTORY, DummyJndiContextFactory.class.getName()));
+    
     @Property(label="Infinispan Configuration", description="A URL that points to the Infinispan configuration. " +
     		"If left empty, an internal default configuration (not recommended for production!) will be used.")
     public static final String CFG_CONFIG_FILE_URL = "org.sakaiproject.nakamura.lite.RespositoryImpl.config_url";
@@ -119,25 +130,49 @@ public class RepositoryImpl implements Repository {
 
     @Activate
     public void activate(final ComponentContext componentContext) throws ClientPoolException,
-        StorageClientException, AccessDeniedException, IOException, ClassNotFoundException {
+        StorageClientException, AccessDeniedException, IOException, ClassNotFoundException,
+        NamingException {
       
       // I think this is safe enough:
       // http://svn.apache.org/repos/asf/felix/trunk/scr/src/main/java/org/apache/felix/scr/impl/helper/ActivateMethod.java
       @SuppressWarnings("unchecked")
-      Map<String, String> properties = (Map<String, String>)componentContext.getProperties();
+      Map<String, String> properties = (Map<String, String>) componentContext.getProperties();
       
-      ClassLoader bundleClassLoader = componentContext.getBundleContext().getBundle()
+      ClassLoader classLoader = getClass().getClassLoader();
+      
+      /*
+      // grab the bundle classloader *sigh*
+      classLoader = componentContext.getBundleContext().getBundle()
           .loadClass("org.infinispan.factories.GlobalComponentRegistry").getClassLoader();
-      
-      InputStream configStream = resolveConfiguration(bundleClassLoader, (String) properties.get(CFG_CONFIG_FILE_URL));
-      ConfigurationBuilderHolder config = new Parser(bundleClassLoader).parse(configStream);
+       */
+      InputStream configStream = resolveConfiguration(classLoader, (String) properties.get(CFG_CONFIG_FILE_URL));
+      ConfigurationBuilderHolder config = new Parser(classLoader).parse(configStream);
       
       // set the custom classloader to the bundle classloader
-      config.getGlobalConfigurationBuilder().classLoader(bundleClassLoader);
+      config.getGlobalConfigurationBuilder().classLoader(classLoader);
       
+      // force the index cache to be indexed, and wire together the jndi stuff so
+      // deployers don't have to worry about this.
+      config.getNamedConfigurationBuilders().get(configuration.getIndexCacheName())
+          .indexing().enabled(true)
+          .addProperty("hibernate.search.infinispan.cachemanager_jndiname", JNDI_CACHE_NAME)
+          .addProperty("hibernate.jndi.class", JNDI_ENV.get(Context.INITIAL_CONTEXT_FACTORY));
+
       cacheContainer = new DefaultCacheManager(config, true);
+
+      ClassLoader prev = ClassLoaderHelper.swapContext(getClass().getClassLoader());
+      try {
+        // stuff the cache container into the jndi context where it can be accessed by
+        // the hibernate cachemanager lookup
+        InitialContext ctx = new InitialContext(JNDI_ENV);
+        ctx.bind(JNDI_CACHE_NAME, cacheContainer);
+        ctx.close();
       
-      doStandardActivation();
+        doStandardActivation();
+      } finally {
+        ClassLoaderHelper.swapContext(prev);
+      }
+
     }
 
     private void doStandardActivation() throws StorageClientException, AccessDeniedException {
@@ -170,6 +205,18 @@ public class RepositoryImpl implements Repository {
     
     @Deactivate
     public void deactivate(Map<String, Object> properties) {
+      ClassLoader prev = ClassLoaderHelper.swapContext(getClass().getClassLoader());
+      try {
+        InitialContext ctx = new InitialContext(JNDI_ENV);
+        ctx.unbind(JNDI_CACHE_NAME);
+        ctx.close();
+      } catch (NamingException e) {
+        LOGGER.warn("Error closing JNDI context. This is probably harmless as the " +
+        		"dummy context does not hold any resources.", e);
+      } finally {
+        ClassLoaderHelper.swapContext(prev);
+      }
+      
       indexes.clear();
       if (cacheContainer != null) {
         cacheContainer.stop();

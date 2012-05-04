@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Sets;
 
+import org.apache.commons.io.IOUtils;
 import org.infinispan.io.GridFilesystem;
 import org.junit.After;
 import org.junit.Assert;
@@ -760,7 +761,7 @@ public class ContentManagerTest {
             byte[] buffer = new byte[8192];
             int j = read.read(buffer);
             Assert.assertNotSame(-1, j);
-            while (j != -1) {
+            while (j > -1) {
                 // Assert.assertEquals((int)b[i] & 0xff, j);
                 i = i + j;
                 j = read.read(buffer);
@@ -1183,6 +1184,33 @@ public class ContentManagerTest {
     contentManager.update(new Content("/testMoveWithChildren/test/ing", ImmutableMap.of("prop1",
         (Object) "value4")));
     contentManager.triggerRefreshAll();
+  }
+  
+  @Test
+  public void testInputStreamToString() throws Exception {
+    AuthenticatorImpl AuthenticatorImpl = new AuthenticatorImpl(client, configuration, null);
+    User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
+    AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
+        currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
+    ContentManagerImpl contentManager = new ContentManagerImpl(fs, client,
+        accessControlManager, configuration, null, new LoggingStorageListener());
+    
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < 800; i++) {
+      sb.append(String.valueOf(i));
+    }
+    
+    String toWrite = sb.toString();
+    
+    contentManager.update(new Content("/testInputStreamToString/string", null));
+    contentManager.writeBody("/testInputStreamToString/string", new ByteArrayInputStream(toWrite.getBytes("utf-8")));
+    
+    InputStream contentIn = contentManager.getInputStream("/testInputStreamToString/string");
+    
+    // make sure the result can be read with IOUtils.toString.
+    String result = IOUtils.toString(contentIn, "utf-8");
+    
+    Assert.assertEquals(toWrite.toString(), result);
   }
 
 }

@@ -17,6 +17,8 @@
  */
 package org.sakaiproject.nakamura.lite.authorizable;
 
+import org.apache.lucene.analysis.KeywordAnalyzer;
+import org.hibernate.search.annotations.Analyzer;
 import org.hibernate.search.annotations.Field;
 import org.hibernate.search.annotations.Index;
 import org.hibernate.search.annotations.Indexed;
@@ -28,6 +30,7 @@ import org.sakaiproject.nakamura.api.lite.IndexDocument;
  * An index document that indexes the authorizable type of an authorizable.
  */
 @Indexed(index="oae") @ProvidedId
+@Analyzer(impl=KeywordAnalyzer.class)
 public class AuthorizableIndexDocument implements IndexDocument {
   private static final long serialVersionUID = 8145154672982930645L;
 
