@@ -29,11 +29,8 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.Service;
-import org.infinispan.Cache;
 import org.infinispan.configuration.parsing.ConfigurationBuilderHolder;
 import org.infinispan.configuration.parsing.Parser;
-import org.infinispan.io.GridFile.Metadata;
-import org.infinispan.io.GridFilesystem;
 import org.infinispan.manager.CacheContainer;
 import org.infinispan.manager.DefaultCacheManager;
 import org.osgi.service.component.ComponentContext;
@@ -113,8 +110,6 @@ public class RepositoryImpl implements Repository {
     
     protected CacheContainer cacheContainer;
     
-    protected GridFilesystem fs;
-    
     public RepositoryImpl() {
     }
 
@@ -139,12 +134,7 @@ public class RepositoryImpl implements Repository {
       Map<String, String> properties = (Map<String, String>) componentContext.getProperties();
       
       ClassLoader classLoader = getClass().getClassLoader();
-      
-      /*
-      // grab the bundle classloader *sigh*
-      classLoader = componentContext.getBundleContext().getBundle()
-          .loadClass("org.infinispan.factories.GlobalComponentRegistry").getClassLoader();
-       */
+
       InputStream configStream = resolveConfiguration(classLoader, (String) properties.get(CFG_CONFIG_FILE_URL));
       ConfigurationBuilderHolder config = new Parser(classLoader).parse(configStream);
       
@@ -153,8 +143,7 @@ public class RepositoryImpl implements Repository {
       
       // force the index cache to be indexed, and wire together the jndi stuff so
       // deployers don't have to worry about this.
-      config.getNamedConfigurationBuilders().get(configuration.getIndexCacheName())
-          .indexing().enabled(true)
+      config.getNamedConfigurationBuilders().get(configuration.getIndexCacheName()).indexing().enabled(true)
           .addProperty("hibernate.search.infinispan.cachemanager_jndiname", JNDI_CACHE_NAME)
           .addProperty("hibernate.jndi.class", JNDI_ENV.get(Context.INITIAL_CONTEXT_FACTORY));
 
@@ -168,6 +157,12 @@ public class RepositoryImpl implements Repository {
         ctx.bind(JNDI_CACHE_NAME, cacheContainer);
         ctx.close();
       
+        cacheContainer.getCache(configuration.getAuthCacheName());
+        cacheContainer.getCache(configuration.getContentMetadataName());
+        cacheContainer.getCache(configuration.getContentBodyCacheName());
+        cacheContainer.getCache(configuration.getIndexCacheName());
+        cacheContainer.getCache(configuration.getIndexStorageCacheName());
+        
         doStandardActivation();
       } finally {
         ClassLoaderHelper.swapContext(prev);
@@ -187,13 +182,7 @@ public class RepositoryImpl implements Repository {
         AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
             configuration);
         authorizableActivator.setup();
-        
-        // set up the content store
-        Cache<String, byte[]> contentBodyCache = cacheContainer.getCache(
-            configuration.getContentBodyCacheName());
-        Cache<String, Metadata> contentMetadataCache = cacheContainer.getCache(
-            configuration.getContentMetadataName());
-        fs = new GridFilesystem(contentBodyCache, contentMetadataCache);
+
       } finally {
         if (client != null) {
           client.close();
@@ -253,13 +242,14 @@ public class RepositoryImpl implements Repository {
         StorageClient client = null;
         try {
             client = clientPool.getClient();
-            AuthenticatorImpl authenticatorImpl = new AuthenticatorImpl(client, configuration, getAuthorizableCache(clientPool.getStorageCacheManager()));
+            AuthenticatorImpl authenticatorImpl = new AuthenticatorImpl(client,
+                configuration, getAuthorizableCache(clientPool.getStorageCacheManager()));
             User currentUser = authenticatorImpl.authenticate(username, password);
             if (currentUser == null) {
                 throw new StorageClientException("User " + username + " cant login with password");
             }
-            return new SessionImpl(this, currentUser, client, fs, configuration, storeListener,
-                principalValidatorResolver);
+            return new SessionImpl(this, currentUser, client, cacheContainer, configuration,
+                storeListener, principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
             throw e;
@@ -287,14 +277,15 @@ public class RepositoryImpl implements Repository {
         StorageClient client = null;
         try {
             client = clientPool.getClient();
-            AuthenticatorImpl authenticatorImpl = new AuthenticatorImpl(client, configuration, getAuthorizableCache(clientPool.getStorageCacheManager()));
+            AuthenticatorImpl authenticatorImpl = new AuthenticatorImpl(client,
+                configuration, getAuthorizableCache(clientPool.getStorageCacheManager()));
             User currentUser = authenticatorImpl.systemAuthenticate(username);
             if (currentUser == null) {
                 throw new StorageClientException("User " + username
                         + " does not exist, cant login administratively as this user");
             }
-            return new SessionImpl(this, currentUser, client, fs, configuration, storeListener,
-                principalValidatorResolver);
+            return new SessionImpl(this, currentUser, client, cacheContainer, configuration,
+                storeListener, principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
             throw e;
@@ -321,8 +312,8 @@ public class RepositoryImpl implements Repository {
                 throw new StorageClientException("User " + username
                         + " does not exist, cant login administratively as this user");
             }
-            return new SessionImpl(this, currentUser, client, fs, configuration, storeListener,
-                principalValidatorResolver);
+            return new SessionImpl(this, currentUser, client, cacheContainer, configuration,
+                storeListener, principalValidatorResolver);
         } catch (ClientPoolException e) {
             clientPool.getClient();
             throw e;
@@ -386,11 +377,7 @@ public class RepositoryImpl implements Repository {
     public CacheContainer getCacheContainer() {
       return this.cacheContainer;
     }
-    
-    public GridFilesystem getGridFilesystem() {
-      return this.fs;
-    }
-    
+
     public void setConnectionPool(StorageClientPool connectionPool) {
         this.clientPool = connectionPool;
     }

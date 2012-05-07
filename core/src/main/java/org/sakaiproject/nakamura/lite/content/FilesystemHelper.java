@@ -18,8 +18,9 @@
 package org.sakaiproject.nakamura.lite.content;
 
 import org.apache.commons.io.IOUtils;
+import org.infinispan.Cache;
+import org.infinispan.io.GridFile.Metadata;
 import org.infinispan.io.GridFilesystem;
-import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,30 +28,52 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
 
 /**
  * A helper class to assist in performing complex file-system operations.
+ * 
+ * <b>Important:</b>Note that running "list()" or "listFiles" is quite expensive, so we
+ * cannot perform recursive algorithms in that sense. We are better off iterating through
+ * every path known by the file metadata cache and grabbing all grandchildren just once.
  */
 public class FilesystemHelper {
 
   private final static Logger LOGGER = LoggerFactory.getLogger(FilesystemHelper.class);
   
+  private GridFilesystem fs;
+  private Cache<String, Metadata> meta;
+  
+  public FilesystemHelper(GridFilesystem fs, Cache<String, Metadata> meta) {
+    this.fs = fs;
+    this.meta = meta;
+  }
+  
   /**
    * Permanently and recursively delete the file at given {@code filesystemPath} and all its
-   * children. 
+   * grand children. 
    * 
    * @param fs
    * @param filesystemPath
    */
-  public static void deleteAll(GridFilesystem fs, String filesystemPath) {
+  public void deleteAll(String filesystemPath) {
     assertNotNull(fs, "fs cannot be null");
     assertNotNull(filesystemPath, "dir cannot be null");
     
     File file = fs.getFile(filesystemPath);
     if (file.isDirectory()) {
-      // recursively delete directory children
-      for (File child : file.listFiles()) {
-        deleteAll(fs, child.getAbsolutePath());
+      List<String> grandchildPaths = findAllGrandchildren(file);
+      
+      // sort by length desc so that leaf files are deleted first, then eventually their parents
+      Collections.sort(grandchildPaths, createStringLengthComparator(false));
+      
+      // delete all in order of length
+      for (String grandchildPath : grandchildPaths) {
+        fs.getFile(grandchildPath).delete();
       }
     }
     
@@ -67,8 +90,8 @@ public class FilesystemHelper {
    * @param toFilesystemPath
    * @throws IOException
    */
-  public static void copyFile(GridFilesystem fs, String fromFilesystemPath,
-      String toFilesystemPath) throws IOException {
+  public void copyFile(String fromFilesystemPath, String toFilesystemPath)
+      throws IOException {
     assertNotNull(fs, "fs cannot be null");
     assertNotNull(fromFilesystemPath, "source path cannot be null");
     assertNotNull(toFilesystemPath, "destination path cannot be null");
@@ -105,8 +128,8 @@ public class FilesystemHelper {
    * @param toFilesystemPath
    * @throws IOException
    */
-  public static void copyAll(GridFilesystem fs, String fromFilesystemPath,
-      String toFilesystemPath) throws IOException {
+  public void copyAll(String fromFilesystemPath, String toFilesystemPath)
+      throws IOException {
     assertNotNull(fs, "fs cannot be null");
     assertNotNull(fromFilesystemPath, "source path cannot be null");
     assertNotNull(toFilesystemPath, "destination path cannot be null");
@@ -116,32 +139,55 @@ public class FilesystemHelper {
     
     if (from.isDirectory()) {
       fs.getFile(toFilesystemPath).mkdirs();
-      for (File child : from.listFiles()) {
-        String childToPath = StorageClientUtils.newPath(toFilesystemPath, child.getName());
-        copyAll(fs, child.getAbsolutePath(), childToPath);
+      List<String> allFromPaths = findAllGrandchildren(from);
+      
+      // start copying at the top and work our way down
+      Collections.sort(allFromPaths, createStringLengthComparator(true));
+      
+      for (String fromChildPath : allFromPaths) {
+        String toChildPath = toFilesystemPath.concat(fromChildPath.substring(fromFilesystemPath.length()));
+        File fromChild = fs.getFile(fromChildPath);
+        File toChild = fs.getFile(toChildPath);
+        if (fromChild.isDirectory()) {
+          toChild.mkdir();
+        } else {
+          copyFile(fromChildPath, toChildPath);
+        }
       }
     } else {
-      copyFile(fs, fromFilesystemPath, toFilesystemPath);
+      copyFile(fromFilesystemPath, toFilesystemPath);
     }
   }
 
-  private static void assertTrue(boolean b, String message) {
+  private List<String> findAllGrandchildren(File file) {
+    List<String> grandchildPaths = new LinkedList<String>();
+    Set<String> paths = meta.keySet();
+    String prefix = String.format("%s/", file.getAbsolutePath());
+    for (String path : paths) {
+      if (path.startsWith(prefix)) {
+        grandchildPaths.add(path);
+      }
+    }
+    return grandchildPaths;
+  }
+  
+  private void assertTrue(boolean b, String message) {
     if (!b) {
       throw new IllegalArgumentException(message);
     }
   }
   
-  private static void assertFalse(boolean b, String message) {
+  private void assertFalse(boolean b, String message) {
     assertTrue(!b, message);
   }
   
-  private static void assertNotNull(Object obj, String message) {
+  private void assertNotNull(Object obj, String message) {
     if (obj == null) {
       throw new IllegalArgumentException(message);
     }
   }
   
-  private static void closeSilent(InputStream is) {
+  private void closeSilent(InputStream is) {
     try {
       if (is != null) {
         is.close();
@@ -151,7 +197,7 @@ public class FilesystemHelper {
     }
   }
   
-  private static void closeSilent(OutputStream os) {
+  private void closeSilent(OutputStream os) {
     try {
       if (os != null) {
         os.close();
@@ -159,5 +205,14 @@ public class FilesystemHelper {
     } catch (IOException e) {
       LOGGER.warn("Failed to close output stream.", e);
     }
+  }
+  
+  private Comparator<String> createStringLengthComparator(boolean asc) {
+    final int mp = asc ? 1 : -1;
+    return new Comparator<String>() {
+      public int compare(String one, String other) {
+        return mp*Integer.valueOf(one.length()).compareTo(other.length());
+      }
+    };
   }
 }

@@ -32,7 +32,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
-import org.infinispan.io.GridFilesystem;
+import org.infinispan.manager.CacheContainer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -73,7 +73,7 @@ public class ContentManagerFinderTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ContentManagerFinderTest.class);
   private RepositoryImpl repository;
-  private GridFilesystem fs;
+  private CacheContainer cacheContainer;
   private StorageClient client;
   private Configuration configuration;
   private StorageClientPool clientPool;
@@ -90,7 +90,7 @@ public class ContentManagerFinderTest {
       configuration = repository.getConfiguration();
       clientPool = repository.getConnectionPool();
       client = clientPool.getClient();
-      fs = repository.getGridFilesystem();
+      cacheContainer = repository.getCacheContainer();
       AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
               configuration);
       authorizableActivator.setup();
@@ -111,7 +111,7 @@ public class ContentManagerFinderTest {
               currentUser, configuration, null, new LoggingStorageListener(),
               principalValidatorResolver);
 
-      ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+      ContentManagerImpl contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
               configuration, null, new LoggingStorageListener());
       contentManager.update(new Content("/simpleFind", ImmutableMap.of("sakai:marker",
               (Object) "testSimpleFindvalue1")));
@@ -137,7 +137,7 @@ public class ContentManagerFinderTest {
               currentUser, configuration, null, new LoggingStorageListener(),
               principalValidatorResolver);
 
-      ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+      ContentManagerImpl contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
               configuration, null, new LoggingStorageListener());
       contentManager.update(new Content("/simpleFind", ImmutableMap.of("sakai:marker",
               (Object) "testSimpleFindvalue1")));
@@ -164,7 +164,7 @@ public class ContentManagerFinderTest {
               currentUser, configuration, null, new LoggingStorageListener(),
               principalValidatorResolver);
 
-      ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+      ContentManagerImpl contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
           configuration, null, new LoggingStorageListener());
       contentManager.update(new Content("/simpleArrayFind", ImmutableMap.of("sakai:category",
               (Object) new String[] { "testSimpleArrayFindvalue88", "testSimpleArrayFindvalue1" })));
@@ -193,7 +193,7 @@ public class ContentManagerFinderTest {
               currentUser, configuration, null, new LoggingStorageListener(),
               principalValidatorResolver);
 
-      ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+      ContentManagerImpl contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
           configuration, null, new LoggingStorageListener());
       contentManager.update(new Content("/testFindNoFilter", ImmutableMap.of("sakai:category",
               (Object) new String[] { "testFindNoFiltervalue88", "testFindNoFiltervalue1" })));
@@ -1057,7 +1057,7 @@ public class ContentManagerFinderTest {
     User currentUser = AuthenticatorImpl.authenticate("admin", "admin");
     AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
             currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
-    ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+    ContentManagerImpl contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
             configuration, null, new LoggingStorageListener());
 
     StorageClientUtils.deleteTree(contentManager, "/testFindAfterChangingPropertyValue");
@@ -1107,7 +1107,7 @@ public class ContentManagerFinderTest {
               currentUser, configuration, null, new LoggingStorageListener(),
               principalValidatorResolver);
 
-      ContentManagerImpl contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+      ContentManagerImpl contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
               configuration, null, new LoggingStorageListener());
       contentManager.update(new Content("/simpleFind", ImmutableMap.of("sakai:marker",
               (Object) "testSimpleFindvalue1")));
@@ -1137,7 +1137,7 @@ public class ContentManagerFinderTest {
     AccessControlManagerImpl accessControlManager = new AccessControlManagerImpl(client,
         currentUser, configuration, null, new LoggingStorageListener(),
         principalValidatorResolver);
-    ContentManager contentManager = new ContentManagerImpl(fs, client, accessControlManager,
+    ContentManager contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
         configuration, null, new LoggingStorageListener());
     // add some content with multi-valued properties
     Content contentA = contentManager.get(MV.pathA);

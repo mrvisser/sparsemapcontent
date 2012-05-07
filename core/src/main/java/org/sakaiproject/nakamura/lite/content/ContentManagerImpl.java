@@ -35,11 +35,13 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
+import org.infinispan.Cache;
+import org.infinispan.io.GridFile.Metadata;
 import org.infinispan.io.GridFilesystem;
+import org.infinispan.manager.CacheContainer;
 import org.infinispan.query.QueryIterator;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.Configuration;
@@ -70,12 +72,13 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileFilter;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -150,8 +153,10 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentManagerImpl.class);
 
-  private static final Set<String> PROTECTED_FIELDS = ImmutableSet.of(PATH_FIELD,
-      LASTMODIFIED_FIELD, LASTMODIFIED_BY_FIELD);
+    private static final String STREAMS_FIELD = "_streams";
+    
+    private static final Set<String> PROTECTED_FIELDS = ImmutableSet.of(PATH_FIELD,
+      LASTMODIFIED_FIELD, LASTMODIFIED_BY_FIELD, STREAMS_FIELD);
 
     // These properties copied from AccessControlManager to keep from binding
     // directly to the implementation class. They should stay in sync.
@@ -167,15 +172,30 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     private static final String PREFIX_VERSION = String.format("%s:%s", PREFIX_CONTENT, "version");
     private static final String PREFIX_PROP_VERSION_METADATA = "metadata";
     
+    private static final String FILE_CHILDREN = String.format("%s:%s", PREFIX_CONTENT, "children");
     private static final String FILE_PROPERTIES = String.format("%s:%s", PREFIX_CONTENT, "props");
     private static final String FILE_STREAM_DEFAULT = PREFIX_STREAM;
 
+    /**
+     * The file meta-data cache that can be used to discover all known content.
+     */
+    private Cache<String, Metadata> metaCache;
+
+    /**
+     * The grid file-system on which content will be stored.
+     */
     private GridFilesystem fs;
+    
+    /**
+     * A helper class for performing bulk file-system operations.
+     */
+    private FilesystemHelper fsHelper;
     
     /**
      * Storage Client
      */
     private StorageClient client;
+    
     /**
      * The access control manager in use.
      */
@@ -187,17 +207,23 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 
     private PathPrincipalTokenResolver pathPrincipalResolver;
 
-    public ContentManagerImpl(GridFilesystem fs, StorageClient client, AccessControlManager accessControlManager,
-            Configuration config,  Map<String, CacheHolder> sharedCache, StoreListener eventListener) {
-        super(client, sharedCache);
-        this.fs = fs;
-        this.client = client;
-        closed = false;
-        this.eventListener = eventListener;
-        String userId = accessControlManager.getCurrentUserId();
-        String usersTokenPath = StorageClientUtils.newPath(userId, "private/tokens");
-        this.pathPrincipalResolver = new PathPrincipalTokenResolver(usersTokenPath, this);
-        this.accessControlManager = new AccessControlManagerTokenWrapper(accessControlManager, pathPrincipalResolver);
+    public ContentManagerImpl(CacheContainer cacheContainer, StorageClient client,
+        AccessControlManager accessControlManager, Configuration config,
+        Map<String, CacheHolder> sharedCache, StoreListener eventListener) {
+      super(client, sharedCache);
+      this.metaCache = cacheContainer.<String, Metadata>getCache(
+          config.getContentMetadataName());
+      this.fs = new GridFilesystem(cacheContainer.<String, byte[]>getCache(
+          config.getContentBodyCacheName()), metaCache);
+      this.client = client;
+      closed = false;
+      this.eventListener = eventListener;
+      String userId = accessControlManager.getCurrentUserId();
+      String usersTokenPath = StorageClientUtils.newPath(userId, "private/tokens");
+      this.pathPrincipalResolver = new PathPrincipalTokenResolver(usersTokenPath, this);
+      this.accessControlManager = new AccessControlManagerTokenWrapper(
+          accessControlManager, pathPrincipalResolver);
+      this.fsHelper = new FilesystemHelper(fs, metaCache);
     }
   
 
@@ -234,44 +260,34 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         return null;
     }
 
-
     public Iterator<Content> listChildren(final String path) throws StorageClientException {
     	if (!exists(path))
     		return (new LinkedList<Content>()).iterator();
       
-  		final String[] children = getFileFromContentPath(path).list(new LiveContentFilenameFilter(
-  		    String.format("%s:", PREFIX_CONTENT)));
-  		if (ArrayUtils.isEmpty(children))
-  			return (new LinkedList<Content>()).iterator();
+  		final Iterator<String> childPaths = listChildPaths(path);
   		
   		return new PreemptiveIterator<Content>() {
-  			int i = 0;
-  			private Content content;
-  			
+  		  private Content content;
+  		  
   			@Override
   			protected boolean internalHasNext() {
-  				content = null;
-  				while (content == null && i < children.length) {
-  					int current = i++;
-  					try {
-  					  String contentPath = StorageClientUtils.newPath(path, children[current]); 
-  						content = get(contentPath);
-  					} catch (StorageClientException e) {
-  						LOGGER.debug("Generic error iterating over child {}", children[current]);
-  					} catch (AccessDeniedException e) {
-  						LOGGER.debug("Access denied iterating over child {}", children[current]);
-  					}
-  				}
-  				if (content == null) {
-  					super.close();
-  					return false;
-  				}
-  				return true;
+  			  if (!childPaths.hasNext())
+  			    return false;
+  			  try {
+  			    content = get(childPaths.next());
+  			    return true;
+  			  } catch (StorageClientException e) {
+            LOGGER.warn("Error getting the next child of "+path, e);
+          } catch (AccessDeniedException e) {
+            LOGGER.warn("Error getting the next child of "+path, e);
+          }
+  			  
+  			  return false;
   			}
   
   			@Override
   			protected Content internalNext() {
-  				return content;
+  			    return content;
   			}
   		};
     }
@@ -280,22 +296,20 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       if (!exists(path))
       	return (new LinkedList<String>()).iterator();
       
-      final String[] children = getFileFromContentPath(path).list(new LiveContentFilenameFilter(
-          String.format("%s:", PREFIX_CONTENT)));
+      List<String> childrenList = Arrays.asList(loadChildren(path));
       
-  		if (ArrayUtils.isEmpty(children))
+  		if (childrenList.isEmpty())
   			return (new LinkedList<String>()).iterator();
   		
+  		final Iterator<String> children = childrenList.iterator();
   		return new PreemptiveIterator<String>() {
-  			int i = 0;
   			private String nextPath;
   			
   			@Override
   			protected boolean internalHasNext() {
   				nextPath = null;
-  				while (nextPath == null && i < children.length) {
-  					int current = i++;
-  					String contentPath = StorageClientUtils.newPath(path, children[current]);
+  				while (nextPath == null && children.hasNext()) {
+  					String contentPath = StorageClientUtils.newPath(path, children.next());
   					if (exists(contentPath)) {
   						nextPath = contentPath;
   						break;
@@ -337,21 +351,23 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     }
 
     public void triggerRefreshAll() throws StorageClientException {
-        triggerRefreshAll("/");
+        triggerRefreshAll(FILESYSTEM_ROOT);
     }
 
     private void triggerRefreshAll(String path) throws StorageClientException {
     	if (User.ADMIN_USER.equals(accessControlManager.getCurrentUserId()) ) {
-    		File file = getFileFromContentPath(path);
-    		FileFilter liveContentFileFilter = new LiveContentFileFilter(String.format("%s:", PREFIX_CONTENT));
-    		for (File child : file.listFiles(liveContentFileFilter)) {
-    		  String childContentPath = getContentPath(child.getAbsolutePath());
-    		  triggerRefreshAll(childContentPath);
-    		}
-    		try {
-	    		triggerRefresh(path);
-    		} catch (AccessDeniedException e) {
-    			LOGGER.error("Exception while refreshing all content", e);
+    	  String grandchildPrefix = String.format("%s/", path);
+    		for (String pathKey : metaCache.keySet()) {
+    		  if (pathKey.startsWith(grandchildPrefix)) {
+      		  File file = fs.getFile(pathKey);
+      		  if (isLiveContentFile(file)) {
+      		    try {
+                triggerRefresh(path);
+              } catch (AccessDeniedException e) {
+                LOGGER.error("Exception while refreshing all content", e);
+              }
+      		  }
+    		  }
     		}
     	}
     }
@@ -414,12 +430,12 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
           originalProperties = content.getOriginalProperties();
           toSave =  Maps.newHashMap(content.getPropertiesForUpdate());
 
+          for (String field : PROTECTED_FIELDS) {
+            LOGGER.debug("Resetting value for {} to {}", field, originalProperties.get(field));
+            toSave.put(field, originalProperties.get(field));
+          }
+          
           if (touch) {
-            for (String field : PROTECTED_FIELDS) {
-              LOGGER.debug("Resetting value for {} to {}", field, originalProperties.get(field));
-              toSave.put(field, originalProperties.get(field));
-            }
-            
             toSave.put(LASTMODIFIED_FIELD, System.currentTimeMillis());
             toSave.put(LASTMODIFIED_BY_FIELD, accessControlManager.getCurrentUserId());
             toSave.put(DELETED_FIELD, new RemoveProperty()); // make certain the deleted field is not set
@@ -441,7 +457,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         // persist the properties to the file-store
         toSave.put(PATH_FIELD, path);
         putProperties(path, toSave);
-        
+
         LOGGER.debug("Saved {} as {} ", new Object[] { path, toSave });
         
         // reset state to unmodified to take further modifications.
@@ -594,6 +610,22 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         
         update(parentContent, true);
         
+        if (streamId != null) {
+          Map<String, Object> props = getFileProperties(path);
+          @SuppressWarnings("unchecked")
+          Set<String> streams = (Set<String>) props.get(STREAMS_FIELD);
+          if (streams == null) {
+            streams = new HashSet<String>();
+            streams.add(streamId);
+            props.put(STREAMS_FIELD, streams);
+            putProperties(path, props);
+          } else if (!streams.contains(streamId)){
+            streams.add(streamId);
+            props.put(STREAMS_FIELD, streams);
+            putProperties(path, props);
+          }
+        }
+        
         eventListener.onUpdate(Security.ZONE_CONTENT, path, accessControlManager.getCurrentUserId(), getResourceType(parentContent), false, null, "stream", streamId);
         return streamFile.length();
     }
@@ -645,6 +677,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
             getResourceType(copiedContent), true, null, "op:copy");
     }
     
+    @SuppressWarnings("unchecked")
     private void copyInternal(String from, String to, boolean withStreams)
         throws StorageClientException, AccessDeniedException, IOException {
       // To Copy, get the to object out and copy everything over.
@@ -657,16 +690,17 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
          LOGGER.debug("Deleting {} ",to);
          delete(to);
       }
-      Set<String> streams = Sets.newHashSet();
+      Set<String> streams = null;
       Map<String, Object> copyProperties = Maps.newHashMap();
       copyProperties.putAll(f.getProperties());
       
       if (withStreams) {
-        StreamFileFilter streamFileFilter = new StreamFileFilter(PREFIX_STREAM);
-        File fromFile = getFileFromContentPath(from);
-        for (File streamFile : fromFile.listFiles(streamFileFilter)) {
-          streams.add(streamFileFilter.getStreamId(streamFile.getName()));
+        streams = (Set<String>) f.getProperty(STREAMS_FIELD);
+        if (streams == null) {
+          streams = Sets.newHashSet();
         }
+      } else {
+        streams = Sets.newHashSet();
       }
       
       
@@ -734,8 +768,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         hardDeleteVersions(from);
       } else {
         try {
-          replaceVersions(from, to);
-          hardDeleteVersions(from);
+          moveAndReplaceVersions(from, to);
         } catch (IOException e) {
           throw new StorageClientException(String.format(
               "Error transferring versions from '%s' to '%s'", from, to), e);
@@ -832,15 +865,9 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
             StorageClientException {
         checkOpen();
         accessControlManager.check(Security.ZONE_CONTENT, path, Permissions.CAN_READ);
-        List<Integer> versionHistory = new LinkedList<Integer>();
         if (exists(path)) {
-        	VersionFileFilter versionFilter = new VersionFileFilter(PREFIX_VERSION);
-          File target = getFileFromContentPath(path);
-          for (File versionFile : target.listFiles(versionFilter)) {
-        		// this version file is for the target file name. log it
-        		versionHistory.add(versionFilter.getVersionNumber(versionFile.getName()));
-          }
-            
+          // discover versions by incrementing a version number counter
+          List<Integer> versionHistory = getVersionNumbers(path);
           // sort the ints and turn it into a string list
           Collections.sort(versionHistory, Collections.reverseOrder());
           List<String> versionHistoryStr = new LinkedList<String>();
@@ -1140,8 +1167,92 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       	LOGGER.warn("Received exception trying to load file properties.", e);
   		} finally {
       	closeSilent(pin);
-      } 
+      }
       return null;
+    }
+    
+    /**
+     * Update the child listing of the parent content of the given {@code path} to ensure
+     * it is aware of the child.
+     * 
+     * @param path
+     * @throws StorageClientException 
+     */
+    private void updateParentChild(String path) throws StorageClientException {
+      String parent = StorageClientUtils.getParentObjectPath(path);
+      String child = StorageClientUtils.getObjectName(path);
+      Set<String> children = new HashSet<String>(Arrays.asList(loadChildren(parent)));
+      if (!children.contains(child)) {
+        children.add(child);
+        putChildren(parent, children.toArray(new String[children.size()]));
+      }
+    }
+    
+    /**
+     * Update the child listing of the parent content of the given {@code path} to ensure
+     * it no longer maintains a reference of the child.
+     * 
+     * @param path
+     * @throws StorageClientException
+     */
+    private void removeParentChild(String path) throws StorageClientException {
+      String parent = StorageClientUtils.getParentObjectPath(path);
+      String child = StorageClientUtils.getObjectName(path);
+      Set<String> children = new HashSet<String>(Arrays.asList(loadChildren(parent)));
+      if (children.contains(child)) {
+        children.remove(child);
+        putChildren(parent, children.toArray(new String[children.size()]));
+      }
+    }
+    
+    private void putChildren(String path, String[] children) throws StorageClientException {
+      File childrenFile = getFileFromContentPath(path, FILE_CHILDREN);
+      if (children == null || children.length == 0) {
+        childrenFile.delete();
+      }
+      
+      ObjectOutputStream oos = null;
+      try {
+        childrenFile.createNewFile();
+        oos = new ObjectOutputStream(fs.getOutput(childrenFile.getAbsolutePath()));
+        oos.writeObject(children);
+      } catch (IOException e) {
+        LOGGER.error("Error persistent children list to file {}", childrenFile.getAbsoluteFile());
+        throw new StorageClientException("Error persisting children.", e);
+      } finally {
+        closeSilent(oos);
+      }
+    }
+    
+    private String[] loadChildren(String path) throws StorageClientException {
+      if (!exists(path))
+        return new String[0];
+      
+      File childrenFile = getFileFromContentPath(path, FILE_CHILDREN);
+      if (!childrenFile.exists())
+        return new String[0];
+      
+      ObjectInputStream ois = null;
+      try {
+        ois = new ObjectInputStream(fs.getInput(childrenFile));
+        
+        String[] children = (String[]) ois.readObject();
+        if (children == null)
+          children = new String[0];
+        
+        return children; 
+      } catch (FileNotFoundException e) {
+        LOGGER.error("Could not find binary children file to read: {}", childrenFile.getAbsolutePath());
+        throw new StorageClientException("Error loading children of content: "+path, e);
+      } catch (IOException e) {
+        LOGGER.error("Could not load binary children file to read: {}", childrenFile.getAbsolutePath());
+        throw new StorageClientException("Error loading children of content: "+path, e);
+      } catch (ClassNotFoundException e) {
+        LOGGER.error("Could not load binary children file to read: {}", childrenFile.getAbsolutePath());
+        throw new StorageClientException("Error loading children of content: "+path, e);
+      } finally {
+        closeSilent(ois);
+      }
     }
     
     private void putProperties(String path, Map<String, Object> toSave)
@@ -1167,17 +1278,13 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       toSave.put(PATH_FIELD, path);
       
         try {
-          
           // values of this content could have changed that unbinds it from indexers. So we should
           // explicitly remove the previous version from the index before updating the new version
           Content previousContent = get(path);
           if (previousContent != null) {
             client.removeIndex(path, previousContent.getProperties());
           }
-          
-          // update the index
-          client.updateIndex(path, toSave);
-          
+
 	        File dir = getFileFromContentPath(path);
 	        dir.mkdir();
 	        
@@ -1191,6 +1298,14 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 	        } finally {
 	        	closeSilent(os);
 	        }
+	        
+          // update the index
+          client.updateIndex(path, toSave);
+          if (previousContent == null && exists(toSave)) {
+            LOGGER.info("Indexing parent-child relationship for {}", path);
+            updateParentChild(path);
+          }
+          
         } catch (IOException e) {
         	throw new StorageClientException(String.format("Error persisting content at '%s'.", path), e);
         }
@@ -1207,7 +1322,25 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         AccessDeniedException {
       if (exists(path)) {
         putProperties(path, ImmutableMap.of(DELETED_FIELD, (Object) TRUE));
+        LOGGER.info("Removing parent-child index for {}", path);
+        removeParentChild(path);
       }
+    }
+    
+    /**
+     * Permanently delete the properties file associated to the given content {@code path}.
+     * 
+     * @param path
+     * @throws StorageClientException 
+     */
+    private void hardDeleteProperties(String path) throws StorageClientException {
+      File propertiesFile = getFileFromContentPath(path, FILE_PROPERTIES);
+      if (propertiesFile.exists())
+        propertiesFile.delete();
+      
+      // ensure the index does not have this document
+      LOGGER.info("Removing parent-child index for {}", path);
+      removeParentChild(path);
     }
     
     /**
@@ -1218,7 +1351,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
      * @param to
      * @throws IOException
      */
-    private void replaceProperties(String from, String to) throws IOException {
+    private void replaceProperties(String from, String to) throws StorageClientException,
+        IOException {
       String fromFilesystemPath = getFilesystemPath(from);
       String toFilesystemPath = getFilesystemPath(to);
       
@@ -1226,7 +1360,11 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
           FILE_PROPERTIES);
       String toPropertiesFilePath = StorageClientUtils.newPath(toFilesystemPath,
           FILE_PROPERTIES);
-      FilesystemHelper.copyFile(fs, fromPropertiesFilePath, toPropertiesFilePath);
+      fsHelper.copyFile(fromPropertiesFilePath, toPropertiesFilePath);
+      
+      // by copying the properties file from one location to another, we have potentially a new content.
+      LOGGER.info("Indexing parent-child relationship for {}", to);
+      updateParentChild(to);
     }
 
     /**
@@ -1234,14 +1372,32 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
      * path.
      * 
      * @param path
+     * @throws AccessDeniedException 
+     * @throws StorageClientException 
      */
-    private void hardDeleteStreams(String path) {
-      File dir = getFileFromContentPath(path);
-      if (dir.exists()) {
-        for (File streamFile : dir.listFiles(new StreamFileFilter(PREFIX_STREAM))) {
-          streamFile.delete();
+    private void hardDeleteStreams(String path) throws StorageClientException, AccessDeniedException {
+      // delete the named streams
+      Map<String, Object> properties = getFileProperties(path);
+      if (properties != null) {
+        @SuppressWarnings("unchecked")
+        Set<String> streams = (Set<String>) properties.get(STREAMS_FIELD);
+        if (streams != null) {
+          for (String streamId : streams) {
+            File streamFile = getFileFromContentPath(path, getStreamFileNameByStreamId(streamId));
+            if (streamFile.exists()) {
+              streamFile.delete();
+            }
+            streams.remove(streamId);
+          }
+          // the streams set has changed, re-persist this guy.
+          putProperties(path, properties);
         }
       }
+      
+      // delete the "default" stream
+      File streamFile = getFileFromContentPath(path, PREFIX_STREAM);
+      if (streamFile.exists())
+        streamFile.delete();
     }
     
     /**
@@ -1251,15 +1407,35 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
      * @param from
      * @param to
      * @throws IOException 
+     * @throws AccessDeniedException 
+     * @throws StorageClientException 
      */
-    private void replaceStreams(String from, String to) throws IOException {
+    private void replaceStreams(String from, String to) throws IOException, StorageClientException, AccessDeniedException {
       hardDeleteStreams(to);
-      File fromFile = getFileFromContentPath(from);
-      String toFilesystemPath = getFilesystemPath(to);
-      for (File fromStreamFile : fromFile.listFiles(new StreamFileFilter(PREFIX_STREAM))) {
-        String toStreamPath = StorageClientUtils.newPath(toFilesystemPath,
-            fromStreamFile.getName());
-        FilesystemHelper.copyFile(fs, fromStreamFile.getAbsolutePath(), toStreamPath);
+      
+      // replace the named streams
+      Map<String, Object> fromProps = getFileProperties(from);
+      if (fromProps != null) {
+        @SuppressWarnings("unchecked")
+        Set<String> streams = (Set<String>)fromProps.get(STREAMS_FIELD);
+        if (streams != null) {
+          for (String streamId : streams) {
+            String fromStreamPath = StorageClientUtils.newPath(getFilesystemPath(from),  streamId);
+            String toStreamPath = StorageClientUtils.newPath(getFilesystemPath(to),  streamId);
+            fsHelper.copyFile(fromStreamPath, toStreamPath);
+          }
+          Map<String, Object> toProps = getFileProperties(to);
+          toProps.put(STREAMS_FIELD, streams);
+          putProperties(to, toProps);
+        }
+      }
+      
+      // replace the default stream
+      File fromStream = getFileFromContentPath(from, PREFIX_STREAM);
+      if (fromStream.exists()) {
+        String toStreamPath = StorageClientUtils.newPath(getFilesystemPath(to),
+            PREFIX_STREAM);
+        fsHelper.copyFile(fromStream.getAbsolutePath(), toStreamPath);
       }
     }
     
@@ -1270,11 +1446,9 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
      * @param path
      */
     private void hardDeleteVersions(String path) {
-      File dir = getFileFromContentPath(path);
-      if (dir.exists()) {
-        for (File versionDir : dir.listFiles(new VersionFileFilter(PREFIX_VERSION))) {
-          FilesystemHelper.deleteAll(fs, versionDir.getAbsolutePath());
-        }
+      // loop through possible version names until we find one that doesn't exist.
+      for (String versionFilesystemPath : getVersionFilePaths(path)) {
+        fsHelper.deleteAll(versionFilesystemPath);
       }
     }
     
@@ -1285,20 +1459,65 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
      * @param from
      * @param to
      * @throws IOException
+     * @throws AccessDeniedException 
+     * @throws StorageClientException 
      */
-    private void replaceVersions(String from, String to) throws IOException {
+    private void moveAndReplaceVersions(String from, String to) throws IOException,
+        StorageClientException, AccessDeniedException {
       hardDeleteVersions(to);
-      File fromFile = getFileFromContentPath(from);
-      String toFilesystemPath = getFilesystemPath(to);
-      for (File fromVersionDir : fromFile.listFiles(new VersionFileFilter(PREFIX_VERSION))) {
-        String toVersionPath = StorageClientUtils.newPath(toFilesystemPath,
-            fromVersionDir.getName());
-        FilesystemHelper.copyAll(fs, fromVersionDir.getAbsolutePath(), toVersionPath);
+      for (String fromVersionPath : getVersionFilePaths(from)) {
+        File fromVersion = fs.getFile(fromVersionPath);
+        String fromVersionContentPath = StorageClientUtils.newPath(from,
+            fromVersion.getName());
+        String toVersionContentPath = StorageClientUtils.newPath(to,
+            fromVersion.getName());
+        replaceStreams(fromVersionContentPath, toVersionContentPath);
+        replaceProperties(fromVersionContentPath, toVersionContentPath);
+        hardDeleteStreams(fromVersionContentPath);
+        hardDeleteProperties(fromVersionContentPath);
+        File versionFile = fs.getFile(fromVersionPath);
+        versionFile.delete();
       }
     }
     
+    /**
+     * Get all version directory file-system paths for the content located at the given
+     * {@code contentPath}.
+     * 
+     * @param contentPath
+     * @return
+     */
+    private List<String> getVersionFilePaths(String contentPath) {
+      List<String> versionPaths = new LinkedList<String>();
+      List<Integer> versionNumbers = getVersionNumbers(contentPath);
+      for (Integer versionNumber : versionNumbers) {
+        String versionPath = StorageClientUtils.newPath(getFilesystemPath(contentPath),
+            getVersionFileNameByVersionNumber(String.valueOf(versionNumber)));
+        versionPaths.add(versionPath);
+      }
+      return versionPaths;
+    }
+    
+    private List<Integer> getVersionNumbers(String contentPath) {
+      int versionNumber = 1;
+      File versionFile = getFileFromContentPath(contentPath,
+          getVersionFileNameByVersionNumber(String.valueOf(versionNumber)));
+      List<Integer> versionNumbers = new LinkedList<Integer>();
+      while (versionFile.exists()) {
+        versionNumbers.add(versionNumber);
+        versionNumber++;
+        versionFile = getFileFromContentPath(contentPath,
+            getVersionFileNameByVersionNumber(String.valueOf(versionNumber)));
+      }
+      return versionNumbers;
+    }
+
     private File getFileFromContentPath(String contentPath) {
       return fs.getFile(getFilesystemPath(contentPath));
+    }
+    
+    private File getFileFromContentPath(String contentPath, String child) {
+      return fs.getFile(getFilesystemPath(contentPath), child);
     }
     
     private boolean exists(Map<String, Object> map) {
@@ -1323,12 +1542,18 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       return filesystemPath;
     }
     
-    private String getContentPath(String filesystemPath) {
-      String contentPath = filesystemPath;
-      if (filesystemPath.startsWith(FILESYSTEM_ROOT)) {
-        contentPath = filesystemPath.substring(FILESYSTEM_ROOT.length());
-      }
-      return contentPath;
+    /**
+     * Determine if the given file represents a piece of live content.
+     * 
+     * @param maybeContent
+     * @return
+     */
+    private boolean isLiveContentFile(File maybeContent) {
+      if (maybeContent == null)
+        return false;
+      // a file is a live content if it exists, if it is a directory, and if it is not versioned content
+      return maybeContent.exists() && maybeContent.isDirectory() &&
+          !maybeContent.getAbsolutePath().contains(PREFIX_VERSION);
     }
     
     private void closeSilent(InputStream is) {

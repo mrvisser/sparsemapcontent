@@ -19,7 +19,7 @@ package org.sakaiproject.nakamura.lite;
 
 import com.google.common.collect.Maps;
 
-import org.infinispan.io.GridFilesystem;
+import org.infinispan.manager.CacheContainer;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.CommitHandler;
 import org.sakaiproject.nakamura.api.lite.Configuration;
@@ -57,7 +57,7 @@ public class SessionImpl implements Session {
     private Map<String, CommitHandler> commitHandlers = Maps.newLinkedHashMap();
 
     public SessionImpl(Repository repository, User currentUser, StorageClient client,
-        GridFilesystem fs, Configuration configuration, StoreListener storeListener,
+        CacheContainer cacheContainer, Configuration configuration, StoreListener storeListener,
         PrincipalValidatorResolver principalValidatorResolver) throws ClientPoolException,
         StorageClientException, AccessDeniedException {
       
@@ -71,8 +71,8 @@ public class SessionImpl implements Session {
         authorizableManager = new AuthorizableManagerImpl(currentUser, this, client, configuration,
                 accessControlManager, null, storeListener);
 
-        contentManager = new ContentManagerImpl(fs, client, accessControlManager, configuration,
-                null, storeListener);
+        contentManager = new ContentManagerImpl(cacheContainer, client, accessControlManager,
+            configuration, null, storeListener);
 
         authenticator = new AuthenticatorImpl(client, configuration, null);
 

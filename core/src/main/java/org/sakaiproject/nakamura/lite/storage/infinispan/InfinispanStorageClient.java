@@ -157,6 +157,24 @@ public class InfinispanStorageClient implements StorageClient {
 		this.storageClientListener = storageClientListener;
 	}
 	
+	public void updateIndex(IndexDocument doc) {
+	  ClassLoader prev = ClassLoaderHelper.swapContext(getClass().getClassLoader());
+    try {
+      indexCache.put(getDocKey(doc), doc);
+    } finally {
+      ClassLoaderHelper.swapContext(prev);
+    }
+	}
+	
+	public void removeIndex(IndexDocument doc) {
+	  ClassLoader prev = ClassLoaderHelper.swapContext(getClass().getClassLoader());
+    try {
+      indexCache.remove(getDocKey(doc));
+    } finally {
+      ClassLoaderHelper.swapContext(prev);
+    }
+	}
+	
 	public void removeIndex(String key, Map<String, Object> values) throws StorageClientException {
 	  List<IndexDocument> documents = getIndexedDocuments(key, values);
 	  if (documents != null) {

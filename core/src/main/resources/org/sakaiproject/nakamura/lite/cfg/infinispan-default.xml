@@ -94,7 +94,7 @@
             </properties>
          </loader>
       </loaders>
-      <eviction maxEntries="1000" strategy="LIRS" />
+      <eviction maxEntries="10" strategy="LIRS" />
 	</namedCache>
 	
 	<namedCache name="IndexCache">
@@ -144,7 +144,7 @@
 	
 	<namedCache name="IndexCacheDirectory">
 		<!-- Cache that holds the lucene index binary data -->
-		<loaders shared="false">
+		<loaders shared="false" preload="true">
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" ignoreModifications="false">
             <properties>
                <property name="driverClass" value="com.mysql.jdbc.Driver" />
@@ -168,13 +168,11 @@
                <property name="timestampColumnName" value="updated" />
                <property name="timestampColumnType" value="bigint" />
                <property name="stringsTableNamePrefix" value="str" />
-               
             </properties>
+            <async enabled="true" flushLockTimeout="15000" threadPoolSize="5" />
          </loader>
       </loaders>
-      
-      <eviction maxEntries="100" strategy="UNORDERED" />
-      
+
       <!--
       	Transactions I guess are required for the lucene index directory module. I think in 5.2, or 5.1.4
       	maybe transactions are optional.

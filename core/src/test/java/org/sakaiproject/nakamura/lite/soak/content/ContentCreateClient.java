@@ -54,7 +54,7 @@ public class ContentCreateClient extends AbstractScalingClient {
                     null, client, configuration, accessControlManagerImpl, sharedCache,
                     new LoggingStorageListener());
 
-            ContentManagerImpl contentManagerImpl = new ContentManagerImpl(fs, client,
+            ContentManagerImpl contentManagerImpl = new ContentManagerImpl(cacheContainer, client,
                     accessControlManagerImpl, configuration, sharedCache,
                     new LoggingStorageListener(true));
 
