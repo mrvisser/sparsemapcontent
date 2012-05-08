@@ -7,7 +7,7 @@
 	</global>
 
 	<namedCache name="AuthCache">
-		<loaders shared="false">
+		<loaders shared="false" preload="true">
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
           		purgeOnStartup="false">
             <properties>
@@ -33,7 +33,6 @@
             </properties>
          </loader>
       </loaders>
-      <eviction maxEntries="10000" strategy="LIRS" />
 	</namedCache>
 
 	<namedCache name="ContentMetadataCache">

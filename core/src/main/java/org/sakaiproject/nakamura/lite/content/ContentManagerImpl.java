@@ -351,18 +351,18 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
     }
 
     public void triggerRefreshAll() throws StorageClientException {
-        triggerRefreshAll(FILESYSTEM_ROOT);
+        triggerRefreshAll("/");
     }
 
     private void triggerRefreshAll(String path) throws StorageClientException {
-    	if (User.ADMIN_USER.equals(accessControlManager.getCurrentUserId()) ) {
-    	  String grandchildPrefix = String.format("%s/", path);
+    	if (User.ADMIN_USER.equals(accessControlManager.getCurrentUserId()) ) { 
+    	  String grandchildPrefix = String.format("%s/", getFilesystemPath(path));
     		for (String pathKey : metaCache.keySet()) {
     		  if (pathKey.startsWith(grandchildPrefix)) {
       		  File file = fs.getFile(pathKey);
       		  if (isLiveContentFile(file)) {
       		    try {
-                triggerRefresh(path);
+                triggerRefresh(getContentPath(file.getAbsolutePath()));
               } catch (AccessDeniedException e) {
                 LOGGER.error("Exception while refreshing all content", e);
               }
@@ -1540,6 +1540,14 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         filesystemPath = StorageClientUtils.newPath(FILESYSTEM_ROOT, contentPath);
       }
       return filesystemPath;
+    }
+    
+    private String getContentPath(String filesystemPath) {
+      if (filesystemPath == null)
+        return null;
+      if (!filesystemPath.startsWith(FILESYSTEM_ROOT))
+        return filesystemPath;
+      return filesystemPath.substring(FILESYSTEM_ROOT.length());
     }
     
     /**
