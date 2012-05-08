@@ -11,10 +11,10 @@
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
           		purgeOnStartup="false">
             <properties>
-               <property name="driverClass" value="com.mysql.jdbc.Driver" />
-               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
-               <property name="userName" value="infinispan" />
-               <property name="password" value="infinispan" />
+               <property name="driverClass" value="org.apache.derby.jdbc.EmbeddedDriver" />
+               <property name="connectionUrl" value="jdbc:derby:sling/db;create=true" />
+               <property name="userName" value="sa" />
+               <property name="password" value="" />
                <!-- pooling -->
                <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
                
@@ -43,10 +43,10 @@
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
           		purgeOnStartup="false">
             <properties>
-               <property name="driverClass" value="com.mysql.jdbc.Driver" />
-               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
-               <property name="userName" value="infinispan" />
-               <property name="password" value="infinispan" />
+               <property name="driverClass" value="org.apache.derby.jdbc.EmbeddedDriver" />
+               <property name="connectionUrl" value="jdbc:derby:sling/db;create=true" />
+               <property name="userName" value="sa" />
+               <property name="password" value="" />
                <!-- pooling -->
                <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
                
@@ -72,10 +72,10 @@
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
           		purgeOnStartup="false">
             <properties>
-               <property name="driverClass" value="com.mysql.jdbc.Driver" />
-               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
-               <property name="userName" value="infinispan" />
-               <property name="password" value="infinispan" />
+               <property name="driverClass" value="org.apache.derby.jdbc.EmbeddedDriver" />
+               <property name="connectionUrl" value="jdbc:derby:sling/db;create=true" />
+               <property name="userName" value="sa" />
+               <property name="password" value="" />
                <!-- pooling -->
                <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
                
@@ -103,7 +103,9 @@
 		<!-- Indexing configuration -->
 		<indexing enabled="true" indexLocalOnly="true">
 			<properties>
-				<property name="hibernate.search.default.directory_provider" value="infinispan" />
+				<property name="hibernate.search.default.directory_provider" value="filesystem" />
+				<property name="hibernate.search.default.indexBase" value="/tmp/infinispan/indexes" />
+				
 				<!--
 					TODO: These shouldn't all be the same cache, should store meta/locks in a replicated cache
 					and data in a distributed cache.
@@ -118,10 +120,10 @@
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
           		purgeOnStartup="false">
             <properties>
-               <property name="driverClass" value="com.mysql.jdbc.Driver" />
-               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
-               <property name="userName" value="infinispan" />
-               <property name="password" value="infinispan" />
+               <property name="driverClass" value="org.apache.derby.jdbc.EmbeddedDriver" />
+               <property name="connectionUrl" value="jdbc:derby:sling/db;create=true" />
+               <property name="userName" value="sa" />
+               <property name="password" value="" />
                <!-- pooling -->
                <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
                
@@ -147,10 +149,10 @@
 		<loaders shared="false" preload="true">
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" ignoreModifications="false">
             <properties>
-               <property name="driverClass" value="com.mysql.jdbc.Driver" />
-               <property name="connectionUrl" value="jdbc:mysql://localhost:3306/infinispan" />
-               <property name="userName" value="infinispan" />
-               <property name="password" value="infinispan" />
+               <property name="driverClass" value="org.apache.derby.jdbc.EmbeddedDriver" />
+               <property name="connectionUrl" value="jdbc:derby:sling/db;create=true" />
+               <property name="userName" value="sa" />
+               <property name="password" value="" />
                <!-- pooling -->
                <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
                
@@ -169,7 +171,7 @@
                <property name="timestampColumnType" value="bigint" />
                <property name="stringsTableNamePrefix" value="str" />
             </properties>
-            <async enabled="true" flushLockTimeout="15000" threadPoolSize="5" />
+            <!--async enabled="true" flushLockTimeout="15000" threadPoolSize="5" /-->
          </loader>
       </loaders>
 
