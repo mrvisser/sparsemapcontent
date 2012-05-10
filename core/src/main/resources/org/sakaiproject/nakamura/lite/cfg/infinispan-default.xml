@@ -6,6 +6,9 @@
 		<globalJmxStatistics enabled="false" />
 	</global>
 
+	<namedCache name="SerializationCache">
+	</namedCache>
+
 	<namedCache name="AuthCache">
 		<loaders shared="false" preload="true">
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"

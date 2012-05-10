@@ -66,6 +66,7 @@ public class BaseMemoryRepository {
             createInMemoryCache());
         cacheContainer.defineConfiguration(configuration.getContentMetadataName(),
             createInMemoryCache());
+        cacheContainer.defineConfiguration("SerializationCache", createInMemoryCache());
         cacheContainer.defineConfiguration(configuration.getAuthCacheName(),
             createInMemoryCache());
         

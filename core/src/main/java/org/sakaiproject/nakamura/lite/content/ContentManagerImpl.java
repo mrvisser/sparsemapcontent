@@ -181,6 +181,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
      */
     private Cache<String, Metadata> metaCache;
 
+    private Cache<String, Object> serializationCache;
+    
     /**
      * The grid file-system on which content will be stored.
      */
@@ -213,6 +215,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       super(client, sharedCache);
       this.metaCache = cacheContainer.<String, Metadata>getCache(
           config.getContentMetadataName());
+      this.serializationCache = cacheContainer.<String, Object>getCache("SerializationCache");
       this.fs = new GridFilesystem(cacheContainer.<String, byte[]>getCache(
           config.getContentBodyCacheName()), metaCache);
       this.client = client;
@@ -1163,6 +1166,9 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       if (!directory.exists())
       	return null;
         
+      if (serializationCache.containsKey(path))
+        return (Map<String, Object>)serializationCache.get(path);
+      
       File propertiesFile = getFileFromContentPath(StorageClientUtils.newPath(path,
           FILE_PROPERTIES));
       if (!propertiesFile.exists())
@@ -1173,7 +1179,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       	pin = new ObjectInputStream(fs.getInput(propertiesFile));
       	@SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) pin.readObject();
-      	
+      	serializationCache.put(path, result);
       	return result;
       } catch (IOException e) {
       	LOGGER.warn("Received exception trying to load file properties.", e);
@@ -1230,6 +1236,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         childrenFile.createNewFile();
         oos = new ObjectOutputStream(fs.getOutput(childrenFile.getAbsolutePath()));
         oos.writeObject(children);
+        serializationCache.put("children:"+path, children);
       } catch (IOException e) {
         LOGGER.error("Error persistent children list to file {}", childrenFile.getAbsoluteFile());
         throw new StorageClientException("Error persisting children.", e);
@@ -1245,6 +1252,9 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       File childrenFile = getFileFromContentPath(path, FILE_CHILDREN);
       if (!childrenFile.exists())
         return new String[0];
+      
+      if (serializationCache.containsKey("children:"+path))
+        return (String[]) serializationCache.get("children:"+path);
       
       ObjectInputStream ois = null;
       try {
@@ -1309,6 +1319,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 	        try {
 	        	os = new ObjectOutputStream(fs.getOutput(props.getAbsolutePath()));
 	        	os.writeObject(toSave);
+	        	serializationCache.put(path, toSave);
 	        } finally {
 	        	closeSilent(os);
 	        }
@@ -1352,6 +1363,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       if (propertiesFile.exists())
         propertiesFile.delete();
       
+      serializationCache.remove(path);
+      
       // ensure the index does not have this document
       LOGGER.info("Removing parent-child index for {}", path);
       removeParentChild(path);
@@ -1375,6 +1388,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       String toPropertiesFilePath = StorageClientUtils.newPath(toFilesystemPath,
           FILE_PROPERTIES);
       fsHelper.copyFile(fromPropertiesFilePath, toPropertiesFilePath);
+      
+      serializationCache.remove(to);
       
       // by copying the properties file from one location to another, we have potentially a new content.
       LOGGER.info("Indexing parent-child relationship for {}", to);
@@ -1463,6 +1478,7 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       // loop through possible version names until we find one that doesn't exist.
       for (String versionFilesystemPath : getVersionFilePaths(path)) {
         fsHelper.deleteAll(versionFilesystemPath);
+        serializationCache.remove(getContentPath(versionFilesystemPath));
       }
     }
     
