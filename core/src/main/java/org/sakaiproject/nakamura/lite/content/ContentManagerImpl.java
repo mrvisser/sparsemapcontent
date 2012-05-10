@@ -708,14 +708,28 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
       update(t);
       LOGGER.debug("Copy Updated {} {} ",to,t);
 
-      for (String stream : streams) {
-          InputStream fromStream = null;
-          try {
-            fromStream = getInputStream(from, stream);
-            writeBody(to, fromStream);
-          } finally {
-            closeSilent(fromStream);
+      if (withStreams) {
+        
+        // first copy the default stream if it exists
+        InputStream defaultStream = null;
+        try {
+          defaultStream = getInputStream(from, null);
+          if (defaultStream != null) {
+            writeBody(to, defaultStream);
           }
+        } finally {
+          closeSilent(defaultStream);
+        }
+        
+        for (String stream : streams) {
+            InputStream fromStream = null;
+            try {
+              fromStream = getInputStream(from, stream);
+              writeBody(to, fromStream, stream);
+            } finally {
+              closeSilent(fromStream);
+            }
+        }
       }
     }
 
