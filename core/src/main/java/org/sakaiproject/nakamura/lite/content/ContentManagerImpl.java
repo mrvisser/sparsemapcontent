@@ -1264,6 +1264,8 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
         if (children == null)
           children = new String[0];
         
+        serializationCache.put("children:"+path, children);
+        
         return children; 
       } catch (FileNotFoundException e) {
         LOGGER.error("Could not find binary children file to read: {}", childrenFile.getAbsolutePath());
