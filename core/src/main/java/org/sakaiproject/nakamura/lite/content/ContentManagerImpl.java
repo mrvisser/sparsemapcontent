@@ -359,17 +359,17 @@ public class ContentManagerImpl extends CachingManagerImpl implements ContentMan
 
     private void triggerRefreshAll(String path) throws StorageClientException {
     	if (User.ADMIN_USER.equals(accessControlManager.getCurrentUserId()) ) { 
-    	  String grandchildPrefix = String.format("%s/", getFilesystemPath(path));
+    	  String grandchildPrefix = getFilesystemPath(path);
     		for (String pathKey : metaCache.keySet()) {
     		  if (pathKey.startsWith(grandchildPrefix)) {
-      		  File file = fs.getFile(pathKey);
-      		  if (isLiveContentFile(file)) {
-      		    try {
-                triggerRefresh(getContentPath(file.getAbsolutePath()));
-              } catch (AccessDeniedException e) {
-                LOGGER.error("Exception while refreshing all content", e);
-              }
-      		  }
+	      		  File file = fs.getFile(pathKey);
+	      		  if (isLiveContentFile(file)) {
+	      		    try {
+	                triggerRefresh(getContentPath(file.getAbsolutePath()));
+	              } catch (AccessDeniedException e) {
+	                LOGGER.error("Exception while refreshing all content", e);
+	              }
+	      		}
     		  }
     		}
     	}
