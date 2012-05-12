@@ -66,9 +66,10 @@ public class BaseMemoryRepository {
             createInMemoryCache());
         cacheContainer.defineConfiguration(configuration.getContentMetadataName(),
             createInMemoryCache());
-        cacheContainer.defineConfiguration("SerializationCache", createInMemoryCache());
         cacheContainer.defineConfiguration(configuration.getAuthCacheName(),
             createInMemoryCache());
+        cacheContainer.defineConfiguration(configuration.getContentPropertiesCacheName(),
+            createInMemoryBatchingCache());
         
         org.infinispan.configuration.cache.Configuration indexCacheConfiguration =
             createInMemoryCache();
@@ -104,4 +105,8 @@ public class BaseMemoryRepository {
           .addProperty("hibernate.search.oae.directory_provider", "ram")
           .addProperty("hibernate.search.lucene_version", "LUCENE_35").build();
     }
+    
+    private org.infinispan.configuration.cache.Configuration createInMemoryBatchingCache() {
+      return (new ConfigurationBuilder()).invocationBatching().enable().build();
+    } 
 }

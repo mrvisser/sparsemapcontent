@@ -17,11 +17,10 @@
  */
 package org.sakaiproject.nakamura.lite.content;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 import org.apache.commons.lang.StringUtils;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
@@ -29,14 +28,16 @@ import org.sakaiproject.nakamura.api.lite.Repository;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
 import org.sakaiproject.nakamura.api.lite.content.Content;
+import org.sakaiproject.nakamura.api.lite.content.ContentManager;
 import org.sakaiproject.nakamura.lite.storage.spi.StorageClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterators;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * Internal Content Object for holding sparse Content objects. Has a protected
@@ -228,7 +229,7 @@ public class InternalContent {
     /**
      * The ContentManager that manages this content object.
      */
-    private ContentManagerImpl contentManager;
+    private ContentManager contentManager;
     /**
      * Map of content object that has been updated since this content object was
      * retrieved.
@@ -272,7 +273,7 @@ public class InternalContent {
      *
      * @param readOnly sets this contentManager to be either read-only or not.
      */
-    void internalize(ContentManagerImpl contentManager, boolean readOnly) {
+    void internalize(ContentManager contentManager, boolean readOnly) {
         this.contentManager = contentManager;
         updated = false;
         newcontent = false;

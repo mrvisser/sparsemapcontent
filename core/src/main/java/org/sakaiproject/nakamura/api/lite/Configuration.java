@@ -60,6 +60,11 @@ public interface Configuration {
     String getContentMetadataName();
     
     /**
+     * @return the name of the content properties storage cache.
+     */
+    String getContentPropertiesCacheName();
+    
+    /**
      * @return name of the index document cache.
      */
     String getIndexCacheName();

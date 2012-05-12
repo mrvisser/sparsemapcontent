@@ -53,6 +53,8 @@ public class ConfigurationImpl implements Configuration {
     protected static final String CONTENT_BODY_CACHE_NAME = "ContentBodyCache";
 
     protected static final String CONTENT_METADATA_CACHE_NAME = "ContentMetadataCache";
+    
+    protected static final String CONTENT_PROPERTIES_CACHE_NAME = "ContentPropertiesCache";
 
     protected static final String INDEX_CACHE_NAME = "IndexCache";
     
@@ -142,6 +144,10 @@ public class ConfigurationImpl implements Configuration {
 
     public String getContentMetadataName() {
       return CONTENT_METADATA_CACHE_NAME;
+    }
+    
+    public String getContentPropertiesCacheName() {
+      return CONTENT_PROPERTIES_CACHE_NAME;
     }
 
     public String getIndexCacheName() {
