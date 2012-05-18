@@ -6,11 +6,43 @@
 		<globalJmxStatistics enabled="false" />
 	</global>
 
-	<namedCache name="SerializationCache">
+	<namedCache name="ContentPropertiesCache">
+	  <loaders shared="false">
+         <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
+          		purgeOnStartup="false">
+            <properties>
+               <property name="driverClass" value="org.apache.derby.jdbc.EmbeddedDriver" />
+               <property name="connectionUrl" value="jdbc:derby:sling/db;create=true" />
+               <property name="userName" value="sa" />
+               <property name="password" value="" />
+               <!-- pooling -->
+               <property name="connectionFactoryClass" value="org.infinispan.loaders.jdbc.connectionfactory.PooledConnectionFactory" />
+               
+               <!-- table management -->
+               <property name="dropTableOnExit" value="false" />
+               <property name="createTableOnStart" value="true" />
+               <property name="cacheName" value="content_prop" />
+               <property name="idColumnName" value="id" />
+               <property name="idColumnType" value="varchar(255)" />
+               <property name="dataColumnName" value="data" />
+               <property name="dataColumnType" value="blob" />
+               <property name="timestampColumnName" value="updated" />
+               <property name="timestampColumnType" value="bigint" />
+               <property name="stringsTableNamePrefix" value="str" />
+               <property name="key2StringMapperClass"
+               		value="org.sakaiproject.nakamura.lite.content.NodeKeyKey2StringMapper" />
+            </properties>
+         </loader>
+      </loaders>
+      
+      <invocationBatching enabled="true" />
+      <transaction transactionManagerLookupClass="org.infinispan.transaction.lookup.GenericTransactionManagerLookup"
+      		transactionMode="TRANSACTIONAL" lockingMode="OPTIMISTIC"/>
+      <eviction maxEntries="100000" strategy="LIRS" />
 	</namedCache>
 
 	<namedCache name="AuthCache">
-		<loaders shared="false" preload="true">
+	  <loaders shared="false" preload="true">
          <loader class="org.infinispan.loaders.jdbc.stringbased.JdbcStringBasedCacheStore" fetchPersistentState="true" ignoreModifications="false"
           		purgeOnStartup="false">
             <properties>

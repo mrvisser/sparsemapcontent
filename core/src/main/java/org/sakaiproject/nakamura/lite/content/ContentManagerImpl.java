@@ -164,7 +164,7 @@ public class ContentManagerImpl implements ContentManager {
     try {
       accessControlManager.check(Security.ZONE_CONTENT, path, Permissions.CAN_READ);
       Map<String, Object> props = treeCache.getData(getContentFqn(path));
-      if (props != null) {
+      if (props != null && !props.isEmpty()) {
         Content content = new Content(path, props);
         ((InternalContent) content).internalize(this, false);
         return content;
@@ -315,6 +315,9 @@ public class ContentManagerImpl implements ContentManager {
       if (!isnew && !exists(path))
         return;
       
+      if (isnew && exists(path))
+        throw new StorageClientException("Illegal attempt to persist transient content onto existing persistent content.");
+      
       boolean touch = withTouch || !User.ADMIN_USER.equals(accessControlManager.getCurrentUserId());
       
       if (isnew) {
@@ -352,6 +355,11 @@ public class ContentManagerImpl implements ContentManager {
         for (String protectedKey : PROTECTED_FIELDS) {
           toSave.put(protectedKey, originalProperties.get(protectedKey));
         }
+        
+        if (touch) {
+          toSave.put(LASTMODIFIED_FIELD, System.currentTimeMillis());
+          toSave.put(LASTMODIFIED_BY_FIELD, accessControlManager.getCurrentUserId());
+        }
       } else {
         return;
       }
@@ -388,12 +396,15 @@ public class ContentManagerImpl implements ContentManager {
       
       // reset state to unmodified to take further modifications.
       content.reset(toSave);
+      ((InternalContent)content).internalize(this, false);
       
       eventListener.onUpdate(Security.ZONE_CONTENT, path, accessControlManager.getCurrentUserId(),
           getResourceType(content),  isnew, originalProperties, "op:update");
       
-    } finally {
       treeCache.getCache().endBatch(true);
+      
+    } finally {
+      treeCache.getCache().endBatch(false);
     }
   }
 

@@ -33,6 +33,7 @@ import org.infinispan.configuration.parsing.ConfigurationBuilderHolder;
 import org.infinispan.configuration.parsing.Parser;
 import org.infinispan.manager.CacheContainer;
 import org.infinispan.manager.DefaultCacheManager;
+import org.jboss.marshalling.SimpleClassResolver;
 import org.osgi.service.component.ComponentContext;
 import org.sakaiproject.nakamura.api.lite.CacheHolder;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
@@ -138,8 +139,10 @@ public class RepositoryImpl implements Repository {
       InputStream configStream = resolveConfiguration(classLoader, (String) properties.get(CFG_CONFIG_FILE_URL));
       ConfigurationBuilderHolder config = new Parser(classLoader).parse(configStream);
       
-      // set the custom classloader to the bundle classloader
+      // set the infinispan class loader and the marshalling class resolver to the bundle class-loader
       config.getGlobalConfigurationBuilder().classLoader(classLoader);
+      config.getGlobalConfigurationBuilder().serialization().classResolver(
+          new SimpleClassResolver(classLoader));
       
       // force the index cache to be indexed, and wire together the jndi stuff so
       // deployers don't have to worry about this.
@@ -152,11 +155,13 @@ public class RepositoryImpl implements Repository {
       ClassLoader prev = ClassLoaderHelper.swapContext(getClass().getClassLoader());
       try {
         // stuff the cache container into the jndi context where it can be accessed by
-        // the hibernate cachemanager lookup
+        // the hibernate cachemanager lookup.
+        // this is only for using infinispan as the hibernate search lucene directory
         InitialContext ctx = new InitialContext(JNDI_ENV);
         ctx.bind(JNDI_CACHE_NAME, cacheContainer);
         ctx.close();
       
+        // assert and bootstrap all caches with the bundle classloader set as the tccl
         cacheContainer.getCache(configuration.getAuthCacheName());
         cacheContainer.getCache(configuration.getContentMetadataName());
         cacheContainer.getCache(configuration.getContentBodyCacheName());

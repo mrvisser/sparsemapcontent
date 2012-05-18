@@ -8,6 +8,7 @@ import com.google.common.collect.Maps;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
 import org.infinispan.Cache;
+import org.infinispan.context.Flag;
 import org.infinispan.manager.CacheContainer;
 import org.infinispan.query.CacheQuery;
 import org.infinispan.query.QueryIterator;
@@ -230,7 +231,8 @@ public class InfinispanStorageClient implements StorageClient {
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> getMapFromStorage(String cacheName, String key) throws StorageClientException {
 	  Map<String, Object> result = Maps.newHashMap();
-	  Map<String, Object> stored = (Map<String, Object>) getCache(cacheName).get(key); 
+	  Map<String, Object> stored = (Map<String, Object>) getCache(cacheName).getAdvancedCache()
+	      .withFlags(Flag.SKIP_CACHE_LOAD).get(key); 
 		if (stored != null) {
 		  result.putAll(stored);
 		}
