@@ -22,16 +22,23 @@ import com.google.common.collect.ImmutableSet;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.sakaiproject.nakamura.api.lite.ClientPoolException;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
+import org.sakaiproject.nakamura.api.lite.Session;
+import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
+import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
+import org.sakaiproject.nakamura.lite.BaseMemoryRepository;
+import org.sakaiproject.nakamura.lite.RepositoryImpl;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 public class StorageClientUtilsTest {
-
+  
     @SuppressWarnings("deprecation")
     @Test
     public void testInt() throws UnsupportedEncodingException {
@@ -172,6 +179,29 @@ public class StorageClientUtilsTest {
         }
     }
     
+    @Test
+    public void testLogoutQuietlySuccessful() throws ClientPoolException, StorageClientException, AccessDeniedException, ClassNotFoundException, IOException {
+      RepositoryImpl repo = new BaseMemoryRepository().getRepository();
+      Session session = repo.loginAdministrative();
+      StorageClientUtils.logoutQuietly(session);
+      try {
+        session.getContentManager();
+        Assert.fail("Session does not appear to be logged out.");
+      } catch (StorageClientException e) {}
+    }
+    
+    @Test
+    public void testLogoutQuietlySwallowNull() {
+      StorageClientUtils.logoutQuietly(null);
+    }
+    
+    @Test
+    public void testLogoutQuietlySwallowAlreadyClosed() throws ClientPoolException, StorageClientException, AccessDeniedException, ClassNotFoundException, IOException {
+      RepositoryImpl repo = new BaseMemoryRepository().getRepository();
+      Session session = repo.loginAdministrative();
+      StorageClientUtils.logoutQuietly(session);
+      StorageClientUtils.logoutQuietly(session);
+    }
 
     private byte[] incByteArray(byte[] b, int i) {
         if ( i == b.length) {

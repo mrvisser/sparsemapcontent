@@ -757,4 +757,17 @@ public class StorageClientUtils {
       retKeys.removeAll(keys1.keySet());
       return retKeys;
     }
+    
+    /**
+     * Log out of the given session, swallowing any tossed exceptions.
+     * 
+     * @param session
+     */
+    public static void logoutQuietly(Session session) {
+      try {
+        session.logout();
+      } catch (Exception e) {
+        LOGGER.warn("Error logging out of session, but swallowing exception.", e);
+      }
+    }
 }
