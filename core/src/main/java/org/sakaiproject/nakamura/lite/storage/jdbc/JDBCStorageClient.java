@@ -294,8 +294,11 @@ public class JDBCStorageClient implements StorageClient, RowHasher, Disposer {
 
         Map<String, PreparedStatement> statementCache = Maps.newHashMap();
         boolean autoCommit = true;
+        boolean abandonTx = false;
         try {
             autoCommit = startBlock();
+            abandonTx = true;
+            
             String rid = rowHash(keySpace, columnFamily, key);
             for (Entry<String, Object> e : values.entrySet()) {
                 String k = e.getKey();
@@ -434,19 +437,27 @@ public class JDBCStorageClient implements StorageClient, RowHasher, Disposer {
             indexer.index(statementCache, keySpace, columnFamily, key, rid, values);
             
             endBlock(autoCommit);
+            abandonTx = false;
         } catch (SQLException e) {
             abandonBlock(autoCommit);
             resetConnection(statementCache);
+            abandonTx = false;
             LOGGER.warn("Failed to perform insert/update operation on {}:{}:{} ", new Object[] {
                     keySpace, columnFamily, key }, e);
             throw new StorageClientException(e.getMessage(), e);
         } catch (IOException e) {
             abandonBlock(autoCommit);
+            abandonTx = false;
             LOGGER.warn("Failed to perform insert/update operation on {}:{}:{} ", new Object[] {
                     keySpace, columnFamily, key }, e);
             throw new StorageClientException(e.getMessage(), e);
         } finally {
+          if (abandonTx) {
+            abandonBlock(autoCommit);
+            resetConnection(statementCache);
+          } else {
             closeStatementCache(statementCache);
+          }
         }
     }
 
